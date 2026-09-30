@@ -57,3 +57,4 @@ Airtable-based daily coaching (scheduled tasks + dashboards keep running
 unchanged until this is verified solid). Next up: writing weigh-ins and meals
 *into* the app itself (currently it's read-only against the migrated/synced
 data), then eventually porting to Expo/React Native for the App Store.
+
