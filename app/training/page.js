@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
 import { fmtDate, todayIso, weekDates, dayTypeFor, DAY_LABELS } from "../../lib/coaching";
-import { pyramidTargets, groupSupersets, computeOverloadFlags, groupLogByExercise, stepSizeFor } from "../../lib/training";
+import { pyramidTargets, groupSupersets, computeOverloadFlags, groupLogByExercise, stepSizeFor, maxWeightForExercise } from "../../lib/training";
 import { useProfile } from "../../lib/useProfile";
 import AppHeader from "../../components/AppHeader";
 import BottomNav from "../../components/BottomNav";
@@ -16,6 +16,7 @@ function ExerciseRow({ ex, formSets, onWeight, onReps, history }) {
   const step = stepSizeFor(ex);
   const last = history?.[0];
   const lastTop = last?.sets?.[last.sets.length - 1];
+  const pr = history && history.length ? maxWeightForExercise(history) : null;
   return (
     <div className="exercise-row">
       <div className="exercise-top">
@@ -23,6 +24,7 @@ function ExerciseRow({ ex, formSets, onWeight, onReps, history }) {
         <div className="exercise-target">
           {ex.target_sets} × {ex.rep_max}→{ex.rep_min} reps · {ex.lift_type}
           {lastTop && <> · last time top set {lastTop.weight_kg}kg × {lastTop.reps}</>}
+          {pr && <> · <b style={{ color: "var(--accent)" }}>PR {pr.weight_kg}kg × {pr.reps}</b></>}
         </div>
       </div>
       <div className="pyramid-sets">
@@ -298,9 +300,19 @@ export default function TrainingPage() {
             const last = hist[0].sets[hist[0].sets.length - 1];
             const first = hist[hist.length - 1].sets[hist[hist.length - 1].sets.length - 1];
             const diff = Math.round((last.weight_kg - first.weight_kg) * 100) / 100;
+            const pr = maxWeightForExercise(hist);
+            const atPr = pr && pr.weight_kg === last.weight_kg && pr.date === hist[0].date;
             return (
               <div className="lift-row" key={exercise}>
-                <div className="lift-name"><div className="n">{exercise}</div><div className="v">{last.weight_kg}kg now{diff !== 0 ? ` · ${diff > 0 ? "+" : ""}${diff}kg` : ""}</div></div>
+                <div className="lift-name">
+                  <div className="n">{exercise}</div>
+                  <div className="v">{last.weight_kg}kg now{diff !== 0 ? ` · ${diff > 0 ? "+" : ""}${diff}kg` : ""}</div>
+                  {pr && (
+                    <div className="meal-desc" style={{ color: atPr ? "var(--accent)" : undefined, fontWeight: atPr ? 700 : 400 }}>
+                      {atPr ? "At PR · " : "PR "}{pr.weight_kg}kg × {pr.reps}{!atPr ? ` (${fmtDate(pr.date)})` : ""}
+                    </div>
+                  )}
+                </div>
                 <div className="lift-chart"><Sparkline points={hist.slice().reverse().map((h) => ({ weight: h.sets[h.sets.length - 1].weight_kg }))} /></div>
               </div>
             );

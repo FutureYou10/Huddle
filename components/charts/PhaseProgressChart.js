@@ -2,11 +2,13 @@
 
 import { fmtDate } from "../../lib/coaching";
 
+// Nutrition/training discipline used to be plotted here too, but they don't
+// really belong on a body-composition phase chart (their own Workout
+// Checklist / Food Discipline cards below cover that) — same call the
+// original dashboard made.
 const METRICS = [
   { key: "fatLossPct", label: "Fat loss progress", color: "var(--fat)" },
   { key: "muscleGainPct", label: "Muscle gain progress", color: "var(--muscle)" },
-  { key: "nutritionPct", label: "Nutrition discipline", color: "var(--nutrition)" },
-  { key: "trainingPct", label: "Training discipline", color: "var(--training)" },
 ];
 
 // Three even phases from start to goal, each metric plotted as a short line

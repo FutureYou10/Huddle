@@ -97,8 +97,8 @@ export default function OverviewPage() {
   const calWeek = wDays.map((d) => ({ date: d, value: calByDay.has(d) ? calByDay.get(d) : null, isToday: d === today }));
   const proteinWeek = wDays.map((d) => ({ date: d, value: proteinByDay.has(d) ? proteinByDay.get(d) : null, isToday: d === today }));
 
-  const last14 = Array.from({ length: 14 }, (_, i) => addDays(today, i - 13));
-  const stepsSeries = last14.map((d) => {
+  const last7 = Array.from({ length: 7 }, (_, i) => addDays(today, i - 6));
+  const stepsSeries = last7.map((d) => {
     const row = metrics.find((m) => m.date === d);
     return { date: d, value: row?.steps ?? null, isToday: d === today };
   });
@@ -158,7 +158,7 @@ export default function OverviewPage() {
       {(error || profileError) && <div className="error-note">{error || profileError}</div>}
 
       <div className="card">
-        <p className="eyebrow" style={{ marginBottom: 10 }}>Today&rsquo;s Targets &amp; Progress</p>
+        <p className="eyebrow" style={{ marginBottom: 10 }}>Today</p>
         <div className="stat-row">
           <div className="stat">
             <div className="k">Calories</div>
@@ -180,43 +180,52 @@ export default function OverviewPage() {
         {!hasTodayLog && <div className="note" style={{ marginTop: 10 }}>Nothing logged yet today — this fills in as your Nutritionist chat gets logged.</div>}
       </div>
 
-      <div className="grid3" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 4 }}>
-        <div className="stat">
-          <div className="k">Weight</div>
-          <div className="v">{latest?.weight ?? "—"} <span style={{ fontSize: 12, color: "var(--text-faint)" }}>→ {profile?.goal_weight ?? "—"}</span></div>
-          {prev && latest && <div className="meal-desc">{(latest.weight - prev.weight >= 0 ? "+" : "")}{(latest.weight - prev.weight).toFixed(1)} vs last reading</div>}
-        </div>
-        <div className="stat">
-          <div className="k">Body Fat %</div>
-          <div className="v">{latest?.body_fat ?? "—"}% <span style={{ fontSize: 12, color: "var(--text-faint)" }}>→ {profile?.goal_body_fat_pct ?? "—"}%</span></div>
-          {prev && latest && <div className="meal-desc">{(latest.body_fat - prev.body_fat >= 0 ? "+" : "")}{(latest.body_fat - prev.body_fat).toFixed(1)}pt vs last reading</div>}
-        </div>
-        <div className="stat">
-          <div className="k">Lean Mass</div>
-          <div className="v">{leanNow != null ? leanNow.toFixed(1) : "—"}</div>
-          {leanPrev != null && leanNow != null && <div className="meal-desc">{(leanNow - leanPrev >= 0 ? "+" : "")}{(leanNow - leanPrev).toFixed(1)} vs last reading</div>}
+      <div className="card">
+        <p className="eyebrow" style={{ marginBottom: 10 }}>
+          Body Composition <span className="meal-desc" style={{ textTransform: "none", letterSpacing: 0 }}>as of {fmtDate(latest?.date)}</span>
+        </p>
+        <div className="stat-row">
+          <div className="stat">
+            <div className="k">Weight</div>
+            <div className="v">{latest?.weight ?? "—"} <span style={{ fontSize: 12, color: "var(--text-faint)" }}>→ {profile?.goal_weight ?? "—"}</span></div>
+            {prev && latest && <div className="meal-desc">{(latest.weight - prev.weight >= 0 ? "+" : "")}{(latest.weight - prev.weight).toFixed(1)} vs last reading</div>}
+          </div>
+          <div className="stat">
+            <div className="k">Body Fat %</div>
+            <div className="v">{latest?.body_fat ?? "—"}% <span style={{ fontSize: 12, color: "var(--text-faint)" }}>→ {profile?.goal_body_fat_pct ?? "—"}%</span></div>
+            {prev && latest && <div className="meal-desc">{(latest.body_fat - prev.body_fat >= 0 ? "+" : "")}{(latest.body_fat - prev.body_fat).toFixed(1)}pt vs last reading</div>}
+          </div>
+          <div className="stat">
+            <div className="k">Lean Mass</div>
+            <div className="v">{leanNow != null ? leanNow.toFixed(1) : "—"}</div>
+            {leanPrev != null && leanNow != null && <div className="meal-desc">{(leanNow - leanPrev >= 0 ? "+" : "")}{(leanNow - leanPrev).toFixed(1)} vs last reading</div>}
+          </div>
+          <div className="stat">
+            <div className="k">Fat Mass Change</div>
+            <div className="v">{fatChangeSinceStart != null ? fatChangeSinceStart.toFixed(1) : "—"}</div>
+            <div className="meal-desc">since {fmtDate(profile?.start_date)}</div>
+          </div>
         </div>
       </div>
 
-      <div className="grid4" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, margin: "10px 0 16px" }}>
-        <div className="stat">
-          <div className="k">Fat Mass Change</div>
-          <div className="v">{fatChangeSinceStart != null ? fatChangeSinceStart.toFixed(1) : "—"}</div>
-          <div className="meal-desc">since {fmtDate(profile?.start_date)}</div>
-        </div>
-        <div className="stat">
-          <div className="k">Calories (yesterday)</div>
-          <div className="v">{hasYesterdayLog ? Math.round(yesterdayCal) : "—"}</div>
-          <div className="meal-desc">{calTarget != null && hasYesterdayLog ? `${yesterdayCal > calTarget ? "+" : ""}${Math.round(yesterdayCal - calTarget)} vs target` : "not logged"}</div>
-        </div>
-        <div className="stat">
-          <div className="k">Steps (yesterday)</div>
-          <div className="v">{yesterdayMetric?.steps ?? "—"}</div>
-        </div>
-        <div className="stat">
-          <div className="k">Protein (yesterday)</div>
-          <div className="v">{hasYesterdayLog ? Math.round(yesterdayProtein) : "—"}g</div>
-          <div className="meal-desc">{proteinTarget != null && hasYesterdayLog ? `${yesterdayProtein > proteinTarget ? "+" : ""}${Math.round(yesterdayProtein - proteinTarget)}g vs target` : "not logged"}</div>
+      <div className="card">
+        <p className="eyebrow" style={{ marginBottom: 10 }}>Yesterday</p>
+        <div className="stat-row">
+          <div className="stat">
+            <div className="k">Calories</div>
+            <div className="v">{hasYesterdayLog ? Math.round(yesterdayCal) : "—"}</div>
+            <div className="meal-desc">{calTarget != null && hasYesterdayLog ? `${yesterdayCal > calTarget ? "+" : ""}${Math.round(yesterdayCal - calTarget)} vs target` : "not logged"}</div>
+          </div>
+          <div className="stat">
+            <div className="k">Protein</div>
+            <div className="v">{hasYesterdayLog ? Math.round(yesterdayProtein) : "—"}g</div>
+            <div className="meal-desc">{proteinTarget != null && hasYesterdayLog ? `${yesterdayProtein > proteinTarget ? "+" : ""}${Math.round(yesterdayProtein - proteinTarget)}g vs target` : "not logged"}</div>
+          </div>
+          <div className="stat">
+            <div className="k">Steps</div>
+            <div className="v">{yesterdayMetric?.steps ?? "—"}</div>
+            <div className="meal-desc">vs 10,000 target</div>
+          </div>
         </div>
       </div>
 
@@ -297,7 +306,7 @@ export default function OverviewPage() {
       </div>
 
       <div className="card">
-        <h3 style={{ fontFamily: "var(--font-display)", fontSize: 13, textTransform: "uppercase", color: "var(--text-dim)", marginBottom: 12 }}>Steps — Last 14 Days <span className="meal-desc">vs 10,000/day target</span></h3>
+        <h3 style={{ fontFamily: "var(--font-display)", fontSize: 13, textTransform: "uppercase", color: "var(--text-dim)", marginBottom: 12 }}>Steps — Last 7 Days <span className="meal-desc">vs 10,000/day target</span></h3>
         <BarChartVsTarget days={stepsSeries} target={10000} color="var(--muscle)" targetLabel="10,000" />
       </div>
 
@@ -318,27 +327,31 @@ export default function OverviewPage() {
       </div>
 
       <div className="card">
-        <h3 style={{ fontFamily: "var(--font-display)", fontSize: 13, textTransform: "uppercase", color: "var(--text-dim)", marginBottom: 12 }}>Log</h3>
-        <div className="log-wrap">
-          <table>
-            <thead><tr><th>Date</th><th>Weight</th><th>Body Fat</th><th>Lean Mass</th><th>Fat Mass</th><th>Steps</th><th>Cal In</th><th>Protein</th><th>Notes</th></tr></thead>
-            <tbody>
-              {logRows.map((r) => (
-                <tr key={r.date}>
-                  <td>{fmtDate(r.date)}</td>
-                  <td>{r.weight ?? "—"}</td>
-                  <td>{r.body_fat != null ? `${r.body_fat}%` : "—"}</td>
-                  <td>{r.weight != null && r.body_fat != null ? deriveLeanMass(r.weight, r.body_fat).toFixed(1) : "—"}</td>
-                  <td>{r.fatMass != null ? r.fatMass.toFixed(1) : "—"}</td>
-                  <td>{r.steps ?? "—"}</td>
-                  <td>{r.calories != null ? Math.round(r.calories) : "—"}</td>
-                  <td>{r.protein != null ? `${Math.round(r.protein)}g` : "—"}</td>
-                  <td className="notes">{r.notes || ""}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <details className="more">
+          <summary style={{ cursor: "pointer", fontFamily: "var(--font-display)", fontSize: 13, textTransform: "uppercase", color: "var(--text-dim)" }}>
+            Log <span className="meal-desc" style={{ textTransform: "none" }}>({logRows.length} days — tap to show)</span>
+          </summary>
+          <div className="log-wrap chart-scroll" style={{ marginTop: 12 }}>
+            <table style={{ minWidth: 640 }}>
+              <thead><tr><th>Date</th><th>Weight</th><th>Body Fat</th><th>Lean Mass</th><th>Fat Mass</th><th>Steps</th><th>Cal In</th><th>Protein</th><th>Notes</th></tr></thead>
+              <tbody>
+                {logRows.map((r) => (
+                  <tr key={r.date}>
+                    <td>{fmtDate(r.date)}</td>
+                    <td>{r.weight ?? "—"}</td>
+                    <td>{r.body_fat != null ? `${r.body_fat}%` : "—"}</td>
+                    <td>{r.weight != null && r.body_fat != null ? deriveLeanMass(r.weight, r.body_fat).toFixed(1) : "—"}</td>
+                    <td>{r.fatMass != null ? r.fatMass.toFixed(1) : "—"}</td>
+                    <td>{r.steps ?? "—"}</td>
+                    <td>{r.calories != null ? Math.round(r.calories) : "—"}</td>
+                    <td>{r.protein != null ? `${Math.round(r.protein)}g` : "—"}</td>
+                    <td className="notes">{r.notes || ""}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
       </div>
 
       <BottomNav />
