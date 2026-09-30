@@ -44,7 +44,7 @@ export default function LoginPage() {
 
   return (
     <div className="shell">
-      <p className="eyebrow">Getstacked</p>
+      <p className="eyebrow">Huddle</p>
       <h1 className="page-title">{mode === "signup" ? "Create your account" : "Welcome back"}</h1>
 
       <form className="card" onSubmit={handleSubmit}>

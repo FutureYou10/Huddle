@@ -123,7 +123,7 @@ export default function Dashboard() {
     <div className="shell">
       <div className="top-row">
         <div>
-          <p className="eyebrow">Getstacked</p>
+          <p className="eyebrow">Huddle</p>
           <h1 className="page-title">{profile?.name ? `${profile.name}'s Plan` : "Your Plan"}</h1>
         </div>
         <button className="logout" onClick={handleLogout}>Sign out</button>

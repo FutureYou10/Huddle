@@ -1,7 +1,7 @@
 import "./globals.css";
 
 export const metadata = {
-  title: "Getstacked",
+  title: "Huddle",
   description: "Your daily coaching dashboard",
 };
 

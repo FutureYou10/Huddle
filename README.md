@@ -1,4 +1,4 @@
-# Getstacked
+# Huddle
 
 Harry's personal coaching dashboard — weigh-ins, goal projection, weekly
 nutrition targets, and recent meals, all backed by the "Getstacked" Supabase
