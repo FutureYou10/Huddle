@@ -1,16 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { supabase } from "../lib/supabaseClient";
 import { fmtDate, fmtWeight, projectGoal } from "../lib/coaching";
-import { ensureProfile } from "../lib/ensureProfile";
+import { useProfile } from "../lib/useProfile";
+import AppHeader from "../components/AppHeader";
+import BottomNav from "../components/BottomNav";
 
-function TrendChart({ points, units }) {
+function TrendChart({ points }) {
   const valid = points.filter((p) => p.weight != null);
   if (valid.length < 2) {
-    return <div className="note">Log a couple more weigh-ins and your trend line shows up here.</div>;
+    return <div className="note">Weigh-ins will start trending here once a couple have synced in.</div>;
   }
 
   const weights = valid.map((p) => p.weight);
@@ -37,10 +37,7 @@ function TrendChart({ points, units }) {
           <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
         </linearGradient>
       </defs>
-      <polygon
-        points={`${x(0)},80 ${linePts} ${x(n - 1)},80`}
-        fill="url(#trendFill)"
-      />
+      <polygon points={`${x(0)},80 ${linePts} ${x(n - 1)},80`} fill="url(#trendFill)" />
       <polyline points={linePts} fill="none" stroke="var(--accent)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
       <circle cx={x(0)} cy={y(first.weight)} r="3.5" fill="var(--bg-card)" stroke="var(--accent)" strokeWidth="2" />
       <circle cx={x(n - 1)} cy={y(last.weight)} r="5" fill="var(--accent)" />
@@ -50,79 +47,41 @@ function TrendChart({ points, units }) {
   );
 }
 
-export default function Dashboard() {
-  const router = useRouter();
-  const [loading, setLoading] = useState(true);
-  const [profile, setProfile] = useState(null);
+export default function OverviewPage() {
+  const { loading: profileLoading, profile, error: profileError } = useProfile();
   const [metrics, setMetrics] = useState([]);
-  const [meals, setMeals] = useState([]);
-  const [target, setTarget] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
+    if (!profile) return;
     let cancelled = false;
-
-    async function load() {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const session = sessionData.session;
-      if (!session) {
-        router.replace("/login");
-        return;
-      }
-
-      try {
-        const profileRow = await ensureProfile(session);
-
-        const [{ data: metricsRows }, { data: mealRows }, { data: targetRows }] = await Promise.all([
-          supabase.from("daily_metrics").select("*").eq("user_id", profileRow.id).order("date", { ascending: true }),
-          supabase.from("food_log").select("*").eq("user_id", profileRow.id).order("logged_at", { ascending: false }).limit(8),
-          supabase.from("weekly_targets").select("*").eq("user_id", profileRow.id).order("week_start", { ascending: false }).limit(1),
-        ]);
-
+    supabase
+      .from("daily_metrics")
+      .select("*")
+      .eq("user_id", profile.id)
+      .order("date", { ascending: true })
+      .then(({ data, error: err }) => {
         if (cancelled) return;
-        setProfile(profileRow);
-        setMetrics(metricsRows || []);
-        setMeals(mealRows || []);
-        setTarget((targetRows && targetRows[0]) || null);
-      } catch (err) {
-        if (!cancelled) setError(err.message || "Couldn't load your data.");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    load();
+        if (err) setError(err.message);
+        setMetrics(data || []);
+        setLoading(false);
+      });
     return () => { cancelled = true; };
-  }, [router]);
+  }, [profile]);
 
-  async function handleLogout() {
-    await supabase.auth.signOut();
-    router.replace("/login");
-  }
+  if (profileLoading || (profile && loading)) return <div className="center-loading">Loading your dashboard…</div>;
 
-  if (loading) return <div className="center-loading">Loading your dashboard…</div>;
-
+  const units = profile?.units || "imperial";
   const withWeight = metrics.filter((m) => m.weight != null);
   const latest = withWeight[withWeight.length - 1];
-  const units = profile?.units || "imperial";
-  const goal = latest ? projectGoal(profile, latest.weight) : null;
+  const goal = latest && profile ? projectGoal(profile, latest.weight) : null;
 
   return (
-    <div className="shell">
-      <div className="top-row">
-        <div>
-          <p className="eyebrow">Huddle</p>
-          <h1 className="page-title">{profile?.name ? `${profile.name}'s Plan` : "Your Plan"}</h1>
-        </div>
-        <button className="logout" onClick={handleLogout}>Sign out</button>
-      </div>
+    <div className="shell shell-with-nav">
+      <AppHeader title={profile?.name ? `${profile.name}'s Plan` : "Your Plan"} />
 
-      {error && <div className="error-note">{error}</div>}
-
-      <div className="quick-actions">
-        <Link href="/log/weight" className="btn primary">+ Weigh-in</Link>
-        <Link href="/log/meal" className="btn secondary">+ Meal</Link>
-      </div>
+      {(error || profileError) && <div className="error-note">{error || profileError}</div>}
 
       <div className="card">
         {latest ? (
@@ -137,9 +96,9 @@ export default function Dashboard() {
             </div>
           </div>
         ) : (
-          <div className="note" style={{ marginBottom: 14 }}>No weigh-ins logged yet.</div>
+          <div className="note" style={{ marginBottom: 14 }}>No weigh-ins synced yet.</div>
         )}
-        <TrendChart points={metrics} units={units} />
+        <TrendChart points={metrics} />
       </div>
 
       {goal && (
@@ -155,46 +114,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {target && (
-        <div className="card">
-          <p className="eyebrow" style={{ marginBottom: 10 }}>This Week's Targets</p>
-          <div className="stat-row">
-            <div className="stat">
-              <div className="k">Calories</div>
-              <div className="v">{target.daily_calorie_target ?? "—"}</div>
-            </div>
-            <div className="stat">
-              <div className="k">Protein</div>
-              <div className="v">{target.daily_protein_target_g ?? "—"}g</div>
-            </div>
-            <div className="stat">
-              <div className="k">Carbs</div>
-              <div className="v">{target.daily_carb_target_g ?? "—"}g</div>
-            </div>
-            <div className="stat">
-              <div className="k">Fat</div>
-              <div className="v">{target.daily_fat_target_g ?? "—"}g</div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="card">
-        <p className="eyebrow" style={{ marginBottom: 10 }}>Recent Meals</p>
-        {meals.length === 0 ? (
-          <div className="note">Nothing logged yet.</div>
-        ) : (
-          meals.map((m) => (
-            <div className="meal-row" key={m.id}>
-              <div>
-                <div className="meal-name">{m.meal}</div>
-                <div className="meal-desc">{m.description}</div>
-              </div>
-              <div className="meal-cal">{m.calories} kcal</div>
-            </div>
-          ))
-        )}
-      </div>
+      <BottomNav />
     </div>
   );
 }

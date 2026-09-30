@@ -1,8 +1,8 @@
 # Huddle
 
-Harry's personal coaching dashboard — weigh-ins, goal projection, weekly
-nutrition targets, and recent meals, all backed by the "Getstacked" Supabase
-project (Postgres + Auth + Row Level Security).
+Harry's personal coaching app — three dashboards (Overview, Food, Training)
+with a bottom tab bar, backed by the "Getstacked" Supabase project (Postgres
++ Auth + Row Level Security).
 
 ## Local development
 
@@ -45,25 +45,38 @@ instead of seeing your existing history.
 ## Project structure
 
 - `app/login/page.js` — sign in / sign up (Supabase Auth, email+password)
-- `app/page.js` — the dashboard (redirects to `/login` if not signed in)
-- `app/log/weight/page.js` — log a weigh-in (upserts by date, so re-logging the same day corrects it instead of duplicating)
-- `app/log/meal/page.js` — log a meal (dropdown meal type, optional macros)
+- `app/page.js` — **Overview** tab: weight trend + goal projection
+- `app/food/page.js` — **Food** tab: weekly targets + meal log, grouped by day
+- `app/training/page.js` — **Training** tab: workout plan + recent sessions (grouped by day, sets shown as chips)
+- `app/training/log/page.js` — log a workout set (the one manual-entry form that's stayed — see Status below)
+- `components/AppHeader.js` — shared page header (title + sign out), used by all three dashboards
+- `components/BottomNav.js` — the tab bar (Overview / Food / Training), active-state aware
 - `lib/supabaseClient.js` — Supabase client setup
-- `lib/coaching.js` — shared goal-projection math + lb/kg conversion (mirrors the onboarding prototype)
-- `lib/constants.js` — canonical dropdown option lists (meal types)
+- `lib/coaching.js` — shared goal-projection math + date helpers (mirrors the onboarding prototype)
+- `lib/constants.js` — canonical dropdown option lists (training day types)
 - `lib/ensureProfile.js` — fetches or creates the signed-in user's profile row; called by every page before it reads or writes anything else
+- `lib/useProfile.js` — shared hook wrapping session-check + `ensureProfile`, used by every page
 - `app/globals.css` — design system (light/dark, matches the onboarding prototype)
 
 ## Status
 
 Running in parallel with the existing Airtable-based daily coaching
-(scheduled tasks + dashboards keep running unchanged until this is verified
-solid). The app now reads **and writes** — you can log a weigh-in or a meal
-from Huddle itself, on top of viewing your history and goal projection.
+(scheduled tasks keep running unchanged until this is verified solid).
+
+**Weigh-ins and meals are read-only in the app on purpose** — those come from
+the existing automated pipeline (Apple Health → Shortcuts → Zapier for
+weigh-ins; the Nutritionist coach chat for meals), not from typing them into
+a form here. Once that pipeline is repointed from Airtable to Supabase (part
+of the eventual cutover), new entries will just show up in Overview/Food
+without the app needing to do anything.
+
+**Training is the one place with manual logging in-app**, because gym
+sets/reps/weight aren't captured by an existing automated source the way
+weigh-ins and meals are.
 
 Not yet in the app: the actual coach chat (Nutritionist / Trainer / Head
 Coach personas + the daily coaching message) — that still runs as
 conversations with Claude and the scheduled task, separately from Huddle.
-Bringing that into the app is the next real step, then eventually porting to
+Bringing that into the app, and repointing the live data pipeline from
+Airtable to Supabase, are the next real steps — then eventually porting to
 Expo/React Native for the App Store.
-
