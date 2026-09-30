@@ -290,3 +290,64 @@ details.more summary::-webkit-details-marker { display: none; }
 .flag.good { color: var(--good); background: color-mix(in srgb, var(--good) 12%, transparent); }
 .flag.neutral { color: var(--text-dim); background: var(--bg-raised); }
 .source-tag { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-faint); background: var(--bg-raised); border-radius: 6px; padding: 1px 6px; margin-left: 6px; white-space: nowrap; }
+
+/* Training day picker */
+.day-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(56px, 1fr)); gap: 6px; }
+.day-btn {
+  text-align: center; padding: 10px 4px; border-radius: 10px;
+  background: var(--bg-raised); border: 1px solid var(--line); cursor: pointer;
+  font-family: var(--font-body); color: var(--text);
+  display: flex; flex-direction: column; gap: 3px; align-items: center;
+}
+.day-btn.today { box-shadow: 0 0 0 1px var(--accent) inset; }
+.day-btn.open { background: color-mix(in srgb, var(--accent) 14%, var(--bg-raised)); border-color: var(--accent); }
+.day-btn.done { border-color: var(--good); }
+.day-btn .lbl { font-size: 10.5px; font-weight: 700; color: var(--text-dim); }
+.day-btn .type { font-size: 9px; color: var(--text-faint); }
+.day-btn .tick { font-size: 10px; color: var(--good); font-weight: 700; }
+
+/* Superset blocks + per-exercise set editors */
+.superset-block { border: 1px dashed var(--accent); border-radius: 10px; padding: 4px 12px; margin: 10px 0; background: color-mix(in srgb, var(--accent) 5%, transparent); }
+.superset-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); font-weight: 700; margin: 8px 0 2px; }
+.exercise-row { padding: 10px 0; border-bottom: 1px solid var(--line); }
+.exercise-row:last-child { border-bottom: none; }
+.exercise-top { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: baseline; margin-bottom: 6px; }
+.exercise-target { font-size: 11px; color: var(--text-faint); }
+.pyramid-sets { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.pyramid-set-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 8px; background: var(--bg-raised); border-radius: 8px; }
+.pyramid-set-row .set-no { font-size: 11px; color: var(--text-dim); min-width: 100px; }
+.pyramid-set-row .set-no em { font-style: normal; color: var(--text-faint); display: block; font-size: 10px; }
+.stepper-wrap { display: flex; align-items: center; gap: 4px; }
+.stepper-wrap input { width: 52px; text-align: center; padding: 6px 2px; }
+.stepper-btn {
+  width: 24px; height: 24px; flex: none; border-radius: 6px; border: 1px solid var(--line);
+  background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 14px; line-height: 1;
+  padding: 0; display: flex; align-items: center; justify-content: center;
+}
+.unit-label { font-size: 10px; color: var(--text-faint); }
+.rep-quick-row { display: flex; gap: 3px; flex-wrap: wrap; }
+.rep-quick-btn {
+  width: 24px; height: 24px; flex: none; border-radius: 6px; border: 1px solid var(--line);
+  background: var(--bg-card); color: var(--text-dim); font-family: var(--font-body); font-weight: 600; font-size: 11px;
+  cursor: pointer; padding: 0; display: flex; align-items: center; justify-content: center;
+}
+.rep-quick-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* Progress/log cards */
+.lift-row { display: flex; align-items: center; gap: 14px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.lift-row:last-child { border-bottom: none; }
+.lift-name { min-width: 100px; }
+.lift-name .n { font-weight: 600; font-size: 12.5px; }
+.lift-name .v { font-size: 11px; color: var(--text-faint); }
+.lift-chart { flex: 1; min-width: 100px; max-width: 160px; }
+.log-entry { padding: 9px 0; border-bottom: 1px solid var(--line); }
+.log-entry:last-child { border-bottom: none; }
+.log-entry-head { display: flex; justify-content: space-between; gap: 10px; align-items: center; flex-wrap: wrap; }
+.log-entry-title { font-weight: 600; font-size: 12.5px; }
+.log-entry-detail { font-size: 11.5px; color: var(--text-dim); margin-top: 4px; }
+.log-note { font-size: 11.5px; color: var(--warn); margin-top: 4px; }
+.btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.save-note { font-size: 11px; color: var(--text-faint); margin-top: 6px; min-height: 14px; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
+.badge.done { background: color-mix(in srgb, var(--good) 15%, transparent); color: var(--good); }
+.badge.pending { background: var(--bg-raised); color: var(--text-faint); }
