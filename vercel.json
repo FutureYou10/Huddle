@@ -1,0 +1,6 @@
+{
+  "crons": [
+    { "path": "/api/cron/daily-coach", "schedule": "0 9 * * *" },
+    { "path": "/api/cron/midweek-checkin", "schedule": "0 17 * * 3" }
+  ]
+}
