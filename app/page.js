@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { supabase } from "../lib/supabaseClient";
 import { fmtDate, fmtWeight, projectGoal } from "../lib/coaching";
+import { ensureProfile } from "../lib/ensureProfile";
 
 function TrendChart({ points, units }) {
   const valid = points.filter((p) => p.weight != null);
@@ -69,21 +71,7 @@ export default function Dashboard() {
       }
 
       try {
-        let { data: profileRow } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", session.user.id)
-          .maybeSingle();
-
-        if (!profileRow) {
-          const { data: created, error: createErr } = await supabase
-            .from("profiles")
-            .insert({ id: session.user.id, name: session.user.email.split("@")[0] })
-            .select()
-            .single();
-          if (createErr) throw createErr;
-          profileRow = created;
-        }
+        const profileRow = await ensureProfile(session);
 
         const [{ data: metricsRows }, { data: mealRows }, { data: targetRows }] = await Promise.all([
           supabase.from("daily_metrics").select("*").eq("user_id", profileRow.id).order("date", { ascending: true }),
@@ -130,6 +118,11 @@ export default function Dashboard() {
       </div>
 
       {error && <div className="error-note">{error}</div>}
+
+      <div className="quick-actions">
+        <Link href="/log/weight" className="btn primary">+ Weigh-in</Link>
+        <Link href="/log/meal" className="btn secondary">+ Meal</Link>
+      </div>
 
       <div className="card">
         {latest ? (

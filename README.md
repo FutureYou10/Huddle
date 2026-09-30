@@ -46,15 +46,24 @@ instead of seeing your existing history.
 
 - `app/login/page.js` — sign in / sign up (Supabase Auth, email+password)
 - `app/page.js` — the dashboard (redirects to `/login` if not signed in)
+- `app/log/weight/page.js` — log a weigh-in (upserts by date, so re-logging the same day corrects it instead of duplicating)
+- `app/log/meal/page.js` — log a meal (dropdown meal type, optional macros)
 - `lib/supabaseClient.js` — Supabase client setup
-- `lib/coaching.js` — shared goal-projection math (mirrors the onboarding prototype)
+- `lib/coaching.js` — shared goal-projection math + lb/kg conversion (mirrors the onboarding prototype)
+- `lib/constants.js` — canonical dropdown option lists (meal types)
+- `lib/ensureProfile.js` — fetches or creates the signed-in user's profile row; called by every page before it reads or writes anything else
 - `app/globals.css` — design system (light/dark, matches the onboarding prototype)
 
 ## Status
 
-This is the first cut of the real app, running in parallel with the existing
-Airtable-based daily coaching (scheduled tasks + dashboards keep running
-unchanged until this is verified solid). Next up: writing weigh-ins and meals
-*into* the app itself (currently it's read-only against the migrated/synced
-data), then eventually porting to Expo/React Native for the App Store.
+Running in parallel with the existing Airtable-based daily coaching
+(scheduled tasks + dashboards keep running unchanged until this is verified
+solid). The app now reads **and writes** — you can log a weigh-in or a meal
+from Huddle itself, on top of viewing your history and goal projection.
+
+Not yet in the app: the actual coach chat (Nutritionist / Trainer / Head
+Coach personas + the daily coaching message) — that still runs as
+conversations with Claude and the scheduled task, separately from Huddle.
+Bringing that into the app is the next real step, then eventually porting to
+Expo/React Native for the App Store.
 
