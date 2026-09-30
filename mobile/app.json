@@ -1,0 +1,36 @@
+{
+  "expo": {
+    "name": "Huddle",
+    "slug": "huddle",
+    "scheme": "huddle",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "bundleIdentifier": "com.futureyou10.huddle",
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSHealthShareUsageDescription": "Huddle reads your weight, body fat, lean mass, steps, energy burned, and food energy from Health so your coach dashboards stay up to date automatically — no more manual logging or Shortcuts.",
+        "NSHealthUpdateUsageDescription": "Huddle does not write anything back to Health. This permission is requested by the Health framework but unused."
+      },
+      "entitlements": {
+        "com.apple.developer.healthkit": true,
+        "com.apple.developer.healthkit.access": []
+      }
+    },
+    "plugins": [
+      "expo-dev-client",
+      [
+        "@kingstinct/react-native-healthkit",
+        {
+          "NSHealthShareUsageDescription": "Huddle reads your weight, body fat, lean mass, steps, energy burned, and food energy from Health so your coach dashboards stay up to date automatically."
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "REPLACE_WITH_EAS_PROJECT_ID"
+      }
+    }
+  }
+}
