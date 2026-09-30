@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import CoachPanel from "./CoachPanel";
 
 function OverviewIcon({ active }) {
   return (
@@ -35,6 +37,17 @@ function TrainingIcon({ active }) {
   );
 }
 
+function CoachIcon({ active }) {
+  return (
+    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke={active ? "var(--accent)" : "currentColor"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 5.5h16a1 1 0 0 1 1 1V15a1 1 0 0 1-1 1H9l-4.5 4V16H4a1 1 0 0 1-1-1V6.5a1 1 0 0 1 1-1Z" />
+      <circle cx="8.5" cy="10.75" r="0.9" fill={active ? "var(--accent)" : "currentColor"} stroke="none" />
+      <circle cx="12" cy="10.75" r="0.9" fill={active ? "var(--accent)" : "currentColor"} stroke="none" />
+      <circle cx="15.5" cy="10.75" r="0.9" fill={active ? "var(--accent)" : "currentColor"} stroke="none" />
+    </svg>
+  );
+}
+
 const TABS = [
   { href: "/", label: "Overview", Icon: OverviewIcon },
   { href: "/food", label: "Food", Icon: FoodIcon },
@@ -43,18 +56,30 @@ const TABS = [
 
 export default function BottomNav() {
   const pathname = usePathname();
+  const [coachOpen, setCoachOpen] = useState(false);
 
   return (
-    <nav className="bottom-nav">
-      {TABS.map(({ href, label, Icon }) => {
-        const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
-        return (
-          <Link key={href} href={href} className={`nav-tab${active ? " active" : ""}`}>
-            <Icon active={active} />
-            <span>{label}</span>
-          </Link>
-        );
-      })}
-    </nav>
+    <>
+      <nav className="bottom-nav">
+        {TABS.map(({ href, label, Icon }) => {
+          const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
+          return (
+            <Link key={href} href={href} className={`nav-tab${active ? " active" : ""}`}>
+              <Icon active={active} />
+              <span>{label}</span>
+            </Link>
+          );
+        })}
+        <button
+          type="button"
+          className={`nav-tab nav-tab-button${coachOpen ? " active" : ""}`}
+          onClick={() => setCoachOpen(true)}
+        >
+          <CoachIcon active={coachOpen} />
+          <span>Coach</span>
+        </button>
+      </nav>
+      <CoachPanel open={coachOpen} onClose={() => setCoachOpen(false)} />
+    </>
   );
 }
