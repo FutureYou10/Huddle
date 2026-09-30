@@ -11,6 +11,10 @@
   --good: #2f8f4e;
   --bad: #c1443d;
   --warn: #a8791b;
+  --fat: #c8501f;
+  --muscle: #1c7f96;
+  --nutrition: #2f8f4e;
+  --training: #a8791b;
   --card-border: rgba(28, 29, 31, 0.08);
   --font-display: "Oswald", sans-serif;
   --font-body: "Inter", sans-serif;
@@ -33,6 +37,10 @@
     --good: #63d47a;
     --bad: #e8615a;
     --warn: #e8b84b;
+    --fat: #ff6a3d;
+    --muscle: #4fc3d9;
+    --nutrition: #63d47a;
+    --training: #e8b84b;
     --card-border: rgba(255, 255, 255, 0.08);
     color-scheme: dark;
   }
@@ -229,3 +237,41 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
   font-variant-numeric: tabular-nums;
   color: var(--text-dim);
 }
+
+/* Charts that draw wider than the shell (SVGs with a minWidth) scroll inside
+   their own box instead of pushing the page sideways. */
+.chart-scroll, .phase-chart-wrap { overflow-x: auto; }
+
+/* Pace tag (goal-projection hero) */
+.pace-tag {
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 3px 9px;
+  border-radius: 20px;
+}
+.pace-tag.ahead { background: color-mix(in srgb, var(--good) 15%, transparent); color: var(--good); }
+.pace-tag.ontrack { background: color-mix(in srgb, var(--warn) 15%, transparent); color: var(--warn); }
+.pace-tag.behind { background: color-mix(in srgb, var(--bad) 15%, transparent); color: var(--bad); }
+.pace-tag.nodata { background: var(--bg-raised); color: var(--text-faint); }
+
+/* Phase Progress chart legend */
+.phase-legend { display: flex; flex-wrap: wrap; gap: 10px 16px; margin-top: 10px; font-size: 11.5px; color: var(--text-dim); }
+.phase-legend .sw { width: 11px; height: 11px; border-radius: 3px; display: inline-block; margin-right: 5px; vertical-align: middle; }
+.phase-legend .sw.dash { background: none; border: 2px dashed var(--text-faint); border-radius: 0; width: 14px; height: 0; }
+
+/* Day-status grids (Workout Checklist, Food Discipline) */
+.workout-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(13px, 1fr)); gap: 5px; }
+.wbox { aspect-ratio: 1; border-radius: 3px; background: var(--bg-raised); border: 1px solid var(--line); }
+.wbox.done { background: var(--muscle); border-color: var(--muscle); }
+.wbox.food-done { background: var(--good); border-color: var(--good); }
+.wbox.missed { background: color-mix(in srgb, var(--bad) 15%, transparent); border-color: var(--bad); }
+.wbox.food-miss { background: color-mix(in srgb, var(--warn) 13%, transparent); border-color: var(--warn); }
+.wbox.rest { background: transparent; border-style: dashed; opacity: 0.45; }
+.wbox.today { border-color: var(--accent); border-width: 2px; }
+
+/* Collapsible "read more" / "how this is calculated" detail blocks */
+details.more summary { cursor: pointer; }
+details.more summary::-webkit-details-marker { display: none; }
