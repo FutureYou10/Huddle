@@ -3,13 +3,22 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
 import { fmtDate, todayIso, weekDates, dayTypeFor, DAY_LABELS } from "../../lib/coaching";
-import { pyramidTargets, groupSupersets, computeOverloadFlags, groupLogByExercise, stepSizeFor, maxWeightForExercise } from "../../lib/training";
+import { pyramidTargets, groupSupersets, computeOverloadFlags, groupLogByExercise, stepSizeFor, maxWeightForExercise, strengthTrendPct } from "../../lib/training";
 import { useProfile } from "../../lib/useProfile";
 import AppHeader from "../../components/AppHeader";
 import BottomNav from "../../components/BottomNav";
 import Sparkline from "../../components/charts/Sparkline";
 
 const REP_QUICK = [6, 7, 8, 9, 10, 11, 12];
+
+// In-progress set weights/reps live only in React state until "Save session"
+// is tapped — so switching screens (bottom nav) or the browser reclaiming a
+// backgrounded tab unmounts this page and wipes anything not yet saved. We
+// mirror every edit into localStorage under this key so a remount can
+// recover it, and clear it once a save actually lands in Supabase.
+function draftKey(userId, dateIso) {
+  return `huddle-training-draft-${userId}-${dateIso}`;
+}
 
 function ExerciseRow({ ex, formSets, onWeight, onReps, history }) {
   const targets = pyramidTargets(ex);
@@ -111,21 +120,26 @@ export default function TrainingPage() {
     }
     return list.sort((a, b) => b.hist.length - a.hist.length).slice(0, 4);
   }, [logByExercise]);
-  // A PB tile per exercise, shown from the very first session logged — unlike
-  // Key Lift Progress above, which waits for a trend (2+ sessions) before it
-  // has a chart worth drawing.
+  // A PB tile per exercise in TODAY's (selected day's) workout only — not
+  // every exercise ever logged — shown from the very first session logged,
+  // unlike Key Lift Progress above, which waits for a trend (2+ sessions)
+  // before it has a chart worth drawing. Each tile also carries a % change
+  // in estimated 1RM vs the previous session, so Harry can see at a glance
+  // whether an exercise is trending up or down.
   const strengthBoard = useMemo(() => {
     const list = [];
-    for (const [exercise, hist] of logByExercise.entries()) {
-      if (!hist.length) continue;
+    for (const ex of dayPlan) {
+      const hist = logByExercise.get(ex.exercise);
+      if (!hist || !hist.length) continue;
       const pr = maxWeightForExercise(hist);
       if (!pr) continue;
-      list.push({ exercise, pr, sessionCount: hist.length });
+      list.push({ exercise: ex.exercise, pr, sessionCount: hist.length, trendPct: strengthTrendPct(hist) });
     }
     return list.sort((a, b) => a.exercise.localeCompare(b.exercise));
-  }, [logByExercise]);
+  }, [dayPlan, logByExercise]);
 
   useEffect(() => {
+    if (!profile) return;
     const init = {};
     for (const ex of dayPlan) {
       const targets = pyramidTargets(ex);
@@ -138,28 +152,63 @@ export default function TrainingPage() {
         };
       }
     }
+    let initNote = session?.note || "";
+    let initComplete = !!session?.complete;
+
+    // Recover any not-yet-saved typing for this date — e.g. if the bottom
+    // nav was tapped or the browser reclaimed a backgrounded tab before
+    // "Save session" was hit, which otherwise silently lost it.
+    try {
+      const raw = localStorage.getItem(draftKey(profile.id, selectedDate));
+      if (raw) {
+        const draft = JSON.parse(raw);
+        if (draft?.formSets) Object.assign(init, draft.formSets);
+        if (typeof draft?.note === "string") initNote = draft.note;
+        if (typeof draft?.complete === "boolean") initComplete = draft.complete;
+      }
+    } catch {}
+
     setFormSets(init);
-    setNote(session?.note || "");
-    setComplete(!!session?.complete);
+    setNote(initNote);
+    setComplete(initComplete);
     setSaveMsg("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedDate, plan, logRows, sessions]);
+  }, [selectedDate, plan, logRows, sessions, profile]);
+
+  function persistDraft(nextFormSets, nextNote, nextComplete) {
+    if (!profile) return;
+    try {
+      localStorage.setItem(draftKey(profile.id, selectedDate), JSON.stringify({ formSets: nextFormSets, note: nextNote, complete: nextComplete }));
+    } catch {}
+  }
 
   if (profileLoading || (profile && loading)) return <div className="center-loading">Loading…</div>;
 
   function onWeight(key, ex, delta, typedValue) {
     setFormSets((prev) => {
-      if (typedValue !== undefined) return { ...prev, [key]: { ...prev[key], weight: typedValue } };
-      const step = stepSizeFor(ex);
-      const cur = Number(prev[key]?.weight) || 0;
-      return { ...prev, [key]: { ...prev[key], weight: String(Math.max(0, cur + delta * step)) } };
+      let next;
+      if (typedValue !== undefined) {
+        next = { ...prev, [key]: { ...prev[key], weight: typedValue } };
+      } else {
+        const step = stepSizeFor(ex);
+        const cur = Number(prev[key]?.weight) || 0;
+        next = { ...prev, [key]: { ...prev[key], weight: String(Math.max(0, cur + delta * step)) } };
+      }
+      persistDraft(next, note, complete);
+      return next;
     });
   }
   function onReps(key, delta, typedValue) {
     setFormSets((prev) => {
-      if (typedValue !== undefined) return { ...prev, [key]: { ...prev[key], reps: String(typedValue) } };
-      const cur = Number(prev[key]?.reps) || 0;
-      return { ...prev, [key]: { ...prev[key], reps: String(Math.max(0, cur + delta)) } };
+      let next;
+      if (typedValue !== undefined) {
+        next = { ...prev, [key]: { ...prev[key], reps: String(typedValue) } };
+      } else {
+        const cur = Number(prev[key]?.reps) || 0;
+        next = { ...prev, [key]: { ...prev[key], reps: String(Math.max(0, cur + delta)) } };
+      }
+      persistDraft(next, note, complete);
+      return next;
     });
   }
 
@@ -191,6 +240,7 @@ export default function TrainingPage() {
         if (insErr) throw insErr;
       }
       await loadAll(profile.id);
+      try { localStorage.removeItem(draftKey(profile.id, selectedDate)); } catch {}
       setSaveMsg("Saved");
     } catch (e) {
       setError(e.message || "Couldn't save that session.");
@@ -246,13 +296,18 @@ export default function TrainingPage() {
 
       {strengthBoard.length > 0 && (
         <div className="card">
-          <p className="eyebrow" style={{ marginBottom: 10 }}>Strength Scoreboard</p>
+          <p className="eyebrow" style={{ marginBottom: 10 }}>Strength Scoreboard <span className="meal-desc" style={{ textTransform: "none", letterSpacing: 0 }}>{dayType}</span></p>
           <div className="scoreboard-grid">
             {strengthBoard.map((s) => (
               <div className="scoreboard-tile" key={s.exercise}>
                 <div className="scoreboard-name">{s.exercise}</div>
                 <div className="scoreboard-value">{s.pr.weight_kg}<span className="scoreboard-unit">kg</span></div>
                 <div className="scoreboard-sub">top set × {s.pr.reps} reps</div>
+                {s.trendPct != null && (
+                  <div className="scoreboard-trend" style={{ color: s.trendPct >= 0 ? "var(--good)" : "var(--bad)" }}>
+                    {s.trendPct >= 0 ? "▲" : "▼"} {Math.abs(s.trendPct).toFixed(1)}% vs last time
+                  </div>
+                )}
                 <div className="scoreboard-status">{s.sessionCount === 1 ? "First session logged" : `${s.sessionCount} sessions logged`}</div>
               </div>
             ))}
@@ -298,10 +353,10 @@ export default function TrainingPage() {
 
             <div className="field" style={{ marginTop: 12 }}>
               <label className="field-label">Notes / niggles</label>
-              <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} />
+              <textarea value={note} onChange={(e) => { const v = e.target.value; setNote(v); persistDraft(formSets, v, complete); }} rows={2} />
             </div>
             <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6, fontSize: 12.5, color: "var(--text-dim)" }}>
-              <input type="checkbox" checked={complete} onChange={(e) => setComplete(e.target.checked)} style={{ width: "auto" }} /> Mark session complete
+              <input type="checkbox" checked={complete} onChange={(e) => { const v = e.target.checked; setComplete(v); persistDraft(formSets, note, v); }} style={{ width: "auto" }} /> Mark session complete
             </label>
             <div className="btn-row">
               <button className="btn primary" style={{ width: "auto", padding: "10px 18px" }} onClick={handleSave} disabled={saving}>{saving ? "Saving…" : "Save session"}</button>
