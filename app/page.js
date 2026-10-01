@@ -4,7 +4,7 @@ import { Fragment, useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import {
   fmtDate, fmtDateLong, fmtWeight, todayIso, addDays, weekDates, dayTypeFor,
-  deriveLeanMass, deriveFatMass, requiredPace, fatMassTrend, paceTag, phaseProgress, isCalorieDayOnTarget,
+  deriveLeanMass, deriveFatMass, requiredPace, fatMassTrend, paceTag, phaseProgress, fatLeanProgressSeries, isCalorieDayOnTarget,
 } from "../lib/coaching";
 import { useProfile } from "../lib/useProfile";
 import AppHeader from "../components/AppHeader";
@@ -40,8 +40,12 @@ export default function OverviewPage() {
     if (!profile) return;
     let cancelled = false;
     const since = addDays(todayIso(), -60);
+    // The Phase Progress chart's quarter/all filters need the metrics history
+    // to reach back to the start of the phase, not just the last 60 days
+    // every other chart on this page needs.
+    const metricsSince = profile.start_date && profile.start_date < since ? profile.start_date : since;
     Promise.all([
-      supabase.from("daily_metrics").select("*").eq("user_id", profile.id).gte("date", since).order("date", { ascending: true }),
+      supabase.from("daily_metrics").select("*").eq("user_id", profile.id).gte("date", metricsSince).order("date", { ascending: true }),
       supabase.from("food_log").select("*").eq("user_id", profile.id).gte("logged_at", since).order("logged_at", { ascending: true }),
       supabase.from("weekly_targets").select("*").eq("user_id", profile.id).order("week_start", { ascending: false }).limit(1),
       supabase.from("workout_sessions").select("*").eq("user_id", profile.id).gte("date", since),
@@ -147,6 +151,7 @@ export default function OverviewPage() {
     { total: foodGradedCount, onTarget: foodOnTargetCount },
     { total: trainingTotalSoFar, done: trainingDoneCount },
   ) : null;
+  const progressSeries = progress ? fatLeanProgressSeries(profile, metrics) : [];
 
   const logRows = metrics.slice().reverse().slice(0, 30).map((m) => ({
     ...m,
@@ -291,7 +296,7 @@ export default function OverviewPage() {
 
       <div className="card">
         <h3 style={{ fontFamily: "var(--font-display)", fontSize: 13, textTransform: "uppercase", color: "var(--text-dim)", marginBottom: 12 }}>Phase Progress</h3>
-        <PhaseProgressChart progress={progress} />
+        <PhaseProgressChart progress={progress} series={progressSeries} />
       </div>
 
       <div className="card">
