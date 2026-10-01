@@ -102,9 +102,26 @@ export async function POST(request) {
       response = await callClaude({ system, messages: workingMessages, tools });
     }
 
+    // Belt and braces: even with the loop above, Claude can still land on a
+    // turn with no usable text — either it hit the round cap above mid tool
+    // call, or it just returned an empty response for reasons we can't fully
+    // predict. Either way, never let that reach Harry as a literal "…" saved
+    // chat message. If a tool call is still dangling, close it out first
+    // (the API requires a tool_result for every tool_use before the next
+    // turn); then ask once more for a reply with `tools` omitted entirely,
+    // so Claude has nothing to call and has to answer in plain text.
+    if (response.stop_reason === "tool_use" || !textFromResponse(response)) {
+      const danglingToolUses = response.content.filter((b) => b.type === "tool_use");
+      const nudgeContent = danglingToolUses.length
+        ? danglingToolUses.map((toolUse) => ({ type: "tool_result", tool_use_id: toolUse.id, content: "Noted." }))
+        : "Reply to Harry now in one short, plain-text sentence — no tool calls.";
+      workingMessages = [...workingMessages, { role: "assistant", content: response.content }, { role: "user", content: nudgeContent }];
+      response = await callClaude({ system, messages: workingMessages });
+    }
+
     const replyText =
       textFromResponse(response) ||
-      (loggedMeals.length ? "Logged that for you." : "…");
+      (loggedMeals.length ? "Logged that for you." : "Got it — let me know if you'd like me to log that.");
 
     const loggedMeal = loggedMeals[0] || null;
 
