@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import {
-  fmtDate, fmtDateLong, fmtWeight, todayIso, addDays, weekDates, dayTypeFor,
+  fmtDate, fmtDateLong, fmtWeight, fmtWeightDelta, todayIso, addDays, weekDates, dayTypeFor,
   deriveLeanMass, deriveFatMass, requiredPace, fatMassTrend, paceTag, phaseProgress, fatLeanProgressSeries, isCalorieDayOnTarget,
 } from "../lib/coaching";
 import { useProfile } from "../lib/useProfile";
@@ -13,6 +13,7 @@ import BarChartVsTarget from "../components/charts/BarChartVsTarget";
 import TrendLine from "../components/charts/TrendLine";
 import DayBoxGrid from "../components/charts/DayBoxGrid";
 import PhaseProgressChart from "../components/charts/PhaseProgressChart";
+import RingStat from "../components/charts/RingStat";
 
 const PACE_TAG_LABEL = { ahead: "Ahead of pace", ontrack: "On track", behind: "Behind pace", nodata: "Still building trend" };
 
@@ -95,6 +96,13 @@ export default function OverviewPage() {
   const startFat = profile?.start_weight != null && profile?.start_body_fat_pct != null
     ? profile.start_weight * (profile.start_body_fat_pct / 100) : null;
   const fatChangeSinceStart = fatNow != null && startFat != null ? fatNow - startFat : null;
+  const startLean = profile?.start_weight != null && profile?.start_body_fat_pct != null
+    ? deriveLeanMass(profile.start_weight, profile.start_body_fat_pct) : null;
+  const leanChangeSinceStart = leanNow != null && startLean != null ? leanNow - startLean : null;
+  const weightChangeSinceStart = latest?.weight != null && profile?.start_weight != null
+    ? latest.weight - profile.start_weight : null;
+  const bodyFatChangeSinceStart = latest?.body_fat != null && profile?.start_body_fat_pct != null
+    ? latest.body_fat - profile.start_body_fat_pct : null;
 
   const required = latest ? requiredPace(profile, latest) : null;
   const trend = fatMassTrend(metrics);
@@ -167,23 +175,11 @@ export default function OverviewPage() {
 
       <div className="card">
         <p className="eyebrow" style={{ marginBottom: 10 }}>Today</p>
-        <div className="stat-row">
-          <div className="stat">
-            <div className="k">Calories</div>
-            <div className="v">{Math.round(todayCal)} <span style={{ color: "var(--text-faint)", fontWeight: 500 }}>/ {calTarget ?? "—"}</span></div>
-          </div>
-          <div className="stat">
-            <div className="k">Protein</div>
-            <div className="v">{Math.round(todayProtein)}g <span style={{ color: "var(--text-faint)", fontWeight: 500 }}>/ {proteinTarget ?? "—"}g</span></div>
-          </div>
-          <div className="stat">
-            <div className="k">Fat</div>
-            <div className="v">{Math.round(todayFat)}g <span style={{ color: "var(--text-faint)", fontWeight: 500 }}>/ {target?.daily_fat_target_g ?? "—"}g</span></div>
-          </div>
-          <div className="stat">
-            <div className="k">Carbs</div>
-            <div className="v">{Math.round(todayCarb)}g <span style={{ color: "var(--text-faint)", fontWeight: 500 }}>/ {target?.daily_carb_target_g ?? "—"}g</span></div>
-          </div>
+        <div className="ring-row">
+          <RingStat label="Calories" value={todayCal} target={calTarget} color="var(--fat)" />
+          <RingStat label="Protein" value={todayProtein} target={proteinTarget} unit="g" color="var(--muscle)" />
+          <RingStat label="Fat" value={todayFat} target={target?.daily_fat_target_g} unit="g" color="var(--training)" />
+          <RingStat label="Carbs" value={todayCarb} target={target?.daily_carb_target_g} unit="g" color="var(--nutrition)" />
         </div>
         {!hasTodayLog && <div className="note" style={{ marginTop: 10 }}>Nothing logged yet today — this fills in as your Nutritionist chat gets logged.</div>}
       </div>
@@ -209,9 +205,31 @@ export default function OverviewPage() {
             {leanPrev != null && leanNow != null && <div className="meal-desc">{(leanNow - leanPrev >= 0 ? "+" : "")}{(leanNow - leanPrev).toFixed(1)} vs last reading</div>}
           </div>
           <div className="stat">
-            <div className="k">Fat Mass Change</div>
-            <div className="v">{fatChangeSinceStart != null ? fatChangeSinceStart.toFixed(1) : "—"}</div>
-            <div className="meal-desc">since {fmtDate(profile?.start_date)}</div>
+            <div className="k">Fat Mass</div>
+            <div className="v">{fatNow != null ? fatNow.toFixed(1) : "—"}</div>
+            {prev && latest && <div className="meal-desc">{(fatNow - deriveFatMass(prev.weight, prev.body_fat) >= 0 ? "+" : "")}{(fatNow - deriveFatMass(prev.weight, prev.body_fat)).toFixed(1)} vs last reading</div>}
+          </div>
+        </div>
+      </div>
+
+      <div className="card">
+        <p className="eyebrow" style={{ marginBottom: 10 }}>Since You Started <span className="meal-desc" style={{ textTransform: "none", letterSpacing: 0 }}>{fmtDate(profile?.start_date)} → {fmtDate(latest?.date)}</span></p>
+        <div className="since-start-hero">
+          <div className="since-start-value">{weightChangeSinceStart != null ? fmtWeightDelta(weightChangeSinceStart, profile?.units) : "—"}</div>
+          <div className="since-start-caption">{weightChangeSinceStart == null ? "no starting weight set" : weightChangeSinceStart < 0 ? "down since you started" : weightChangeSinceStart > 0 ? "up since you started" : "unchanged since you started"}</div>
+        </div>
+        <div className="stat-row">
+          <div className="stat">
+            <div className="k">Fat Mass</div>
+            <div className="v">{fatChangeSinceStart != null ? fmtWeightDelta(fatChangeSinceStart, profile?.units) : "—"}</div>
+          </div>
+          <div className="stat">
+            <div className="k">Lean Mass</div>
+            <div className="v">{leanChangeSinceStart != null ? fmtWeightDelta(leanChangeSinceStart, profile?.units) : "—"}</div>
+          </div>
+          <div className="stat">
+            <div className="k">Body Fat %</div>
+            <div className="v">{bodyFatChangeSinceStart != null ? `${bodyFatChangeSinceStart >= 0 ? "+" : ""}${bodyFatChangeSinceStart.toFixed(1)}pt` : "—"}</div>
           </div>
         </div>
       </div>
@@ -271,19 +289,6 @@ export default function OverviewPage() {
         </details>
       </div>
 
-      <div className="card countdown-card" style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
-        <div>
-          <div className="countdown-num" style={{ fontFamily: "var(--font-display)", fontSize: 40, fontWeight: 700, color: "var(--accent)" }}>
-            {trainingLeft + nutritionLeft}<small style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase" }}>things left to do</small>
-          </div>
-          <div className="meal-desc">between today and {fmtDate(profile?.end_date)}</div>
-        </div>
-        <div style={{ display: "flex", gap: 16 }}>
-          <div><div className="v" style={{ fontSize: 21 }}>{trainingLeft}</div><div className="meal-desc">Training sessions</div></div>
-          <div><div className="v" style={{ fontSize: 21 }}>{nutritionLeft}</div><div className="meal-desc">On-target nutrition days</div></div>
-        </div>
-      </div>
-
       <div className="card">
         <h3 style={{ fontFamily: "var(--font-display)", fontSize: 13, textTransform: "uppercase", color: "var(--text-dim)", marginBottom: 12 }}>
           This Week <span className="meal-desc">{fmtDate(wDays[0])} – {fmtDate(wDays[6])}</span>
@@ -316,6 +321,19 @@ export default function OverviewPage() {
       <div className="card">
         <h3 style={{ fontFamily: "var(--font-display)", fontSize: 13, textTransform: "uppercase", color: "var(--text-dim)", marginBottom: 12 }}>Steps — Last 7 Days <span className="meal-desc">vs 10,000/day target</span></h3>
         <BarChartVsTarget days={stepsSeries} target={10000} color="var(--muscle)" targetLabel="10,000" />
+      </div>
+
+      <div className="card countdown-card" style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
+        <div>
+          <div className="countdown-num" style={{ fontFamily: "var(--font-display)", fontSize: 40, fontWeight: 700, color: "var(--accent)" }}>
+            {trainingLeft + nutritionLeft}<small style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase" }}>things left to do</small>
+          </div>
+          <div className="meal-desc">between today and {fmtDate(profile?.end_date)}</div>
+        </div>
+        <div style={{ display: "flex", gap: 16 }}>
+          <div><div className="v" style={{ fontSize: 21 }}>{trainingLeft}</div><div className="meal-desc">Training sessions</div></div>
+          <div><div className="v" style={{ fontSize: 21 }}>{nutritionLeft}</div><div className="meal-desc">On-target nutrition days</div></div>
+        </div>
       </div>
 
       <div className="card">
