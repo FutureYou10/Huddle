@@ -54,9 +54,22 @@ export async function POST(request) {
     const messages = [...history, { role: "user", content: message.trim() }];
 
     let response = await callClaude({ system, messages, tools });
-    let loggedMeal = null;
+    const loggedMeals = [];
+    let workingMessages = messages;
 
-    if (response.stop_reason === "tool_use") {
+    // A single food-heavy message can need more than one log_meal call (e.g.
+    // two separate items), and Claude sometimes spreads those across more
+    // than one tool-use round rather than issuing them in parallel in one
+    // round. The old code only ever processed one round, then unconditionally
+    // took whatever text came back — including nothing at all when that
+    // follow-up was itself another tool call. That silently dropped the
+    // second item and persisted a literal "…" as a real chat message. Loop
+    // until Claude actually stops calling tools, with a sane cap so a
+    // misbehaving model can't spin forever.
+    let rounds = 0;
+    const MAX_TOOL_ROUNDS = 5;
+    while (response.stop_reason === "tool_use" && rounds < MAX_TOOL_ROUNDS) {
+      rounds += 1;
       const toolUses = response.content.filter((b) => b.type === "tool_use");
       const toolResults = [];
       for (const toolUse of toolUses) {
@@ -77,7 +90,7 @@ export async function POST(request) {
           if (insertErr) {
             toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content: `Failed to log: ${insertErr.message}`, is_error: true });
           } else {
-            loggedMeal = input;
+            loggedMeals.push(input);
             toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content: "Logged." });
           }
         } else {
@@ -85,19 +98,23 @@ export async function POST(request) {
         }
       }
 
-      const followUpMessages = [...messages, { role: "assistant", content: response.content }, { role: "user", content: toolResults }];
-      response = await callClaude({ system, messages: followUpMessages, tools });
+      workingMessages = [...workingMessages, { role: "assistant", content: response.content }, { role: "user", content: toolResults }];
+      response = await callClaude({ system, messages: workingMessages, tools });
     }
 
-    const replyText = textFromResponse(response) || "…";
+    const replyText =
+      textFromResponse(response) ||
+      (loggedMeals.length ? "Logged that for you." : "…");
+
+    const loggedMeal = loggedMeals[0] || null;
 
     const { error: insertHistErr } = await supabase.from("coach_messages").insert([
       { user_id: userId, coach, role: "user", body: message.trim(), kind: "chat" },
-      { user_id: userId, coach, role: "assistant", body: replyText, kind: "chat", meta: loggedMeal ? { logged_meal: loggedMeal } : null },
+      { user_id: userId, coach, role: "assistant", body: replyText, kind: "chat", meta: loggedMeals.length ? { logged_meals: loggedMeals } : null },
     ]);
     if (insertHistErr) throw insertHistErr;
 
-    return NextResponse.json({ reply: replyText, loggedMeal });
+    return NextResponse.json({ reply: replyText, loggedMeal, loggedMeals });
   } catch (err) {
     if (err instanceof AnthropicConfigError) {
       return NextResponse.json({ error: err.message, needsSetup: true }, { status: 503 });
