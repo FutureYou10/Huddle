@@ -23,8 +23,10 @@
   color-scheme: light;
 }
 
+/* System ("Match device") theme: only prefers-color-scheme decides, unless
+   an explicit choice below overrides it. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #121316;
     --bg-card: #1f2127;
     --bg-raised: #1b1d22;
@@ -44,6 +46,50 @@
     --card-border: rgba(255, 255, 255, 0.08);
     color-scheme: dark;
   }
+}
+
+/* Explicit choice from Settings (Appearance) — wins over the device setting
+   in both directions. */
+:root[data-theme="dark"] {
+  --bg: #121316;
+  --bg-card: #1f2127;
+  --bg-raised: #1b1d22;
+  --line: #2c2f37;
+  --text: #f2f1ec;
+  --text-dim: #9a9ca5;
+  --text-faint: #6b6d76;
+  --accent: #e8763f;
+  --accent-rgb: 232, 118, 63;
+  --good: #63d47a;
+  --bad: #e8615a;
+  --warn: #e8b84b;
+  --fat: #ff6a3d;
+  --muscle: #4fc3d9;
+  --nutrition: #63d47a;
+  --training: #e8b84b;
+  --card-border: rgba(255, 255, 255, 0.08);
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  --bg: #faf9f6;
+  --bg-card: #ffffff;
+  --bg-raised: #f2f0ea;
+  --line: #e5e2da;
+  --text: #1c1d1f;
+  --text-dim: #5b5d63;
+  --text-faint: #8b8d93;
+  --accent: #c8501f;
+  --accent-rgb: 200, 80, 31;
+  --good: #2f8f4e;
+  --bad: #c1443d;
+  --warn: #a8791b;
+  --fat: #c8501f;
+  --muscle: #1c7f96;
+  --nutrition: #2f8f4e;
+  --training: #a8791b;
+  --card-border: rgba(28, 29, 31, 0.08);
+  color-scheme: light;
 }
 
 * { box-sizing: border-box; }
@@ -174,6 +220,8 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 
 .top-row { display: flex; align-items: baseline; justify-content: space-between; }
 .logout { font-size: 12px; color: var(--text-faint); text-decoration: underline; cursor: pointer; background: none; border: none; padding: 0; font-family: var(--font-body); }
+.icon-link { display: flex; color: var(--text-faint); }
+.icon-link:hover { color: var(--text-dim); }
 
 .center-loading { display: flex; align-items: center; justify-content: center; min-height: 60vh; color: var(--text-faint); font-size: 13px; }
 
@@ -538,3 +586,58 @@ details.more summary::-webkit-details-marker { display: none; }
   cursor: pointer;
 }
 .coach-send:disabled { opacity: 0.4; cursor: default; }
+
+/* --- Settings page ------------------------------------------------- */
+.field-hint { font-size: 11.5px; color: var(--text-faint); margin-top: 5px; line-height: 1.4; }
+.field-row { display: flex; gap: 10px; }
+.field-row .field { flex: 1; margin-bottom: 0; }
+
+.segmented { display: flex; gap: 6px; background: var(--bg-raised); border: 1px solid var(--line); border-radius: 12px; padding: 4px; }
+.segmented button {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 10px;
+  border-radius: 9px;
+  cursor: pointer;
+}
+.segmented button.active { background: var(--bg-card); color: var(--accent); box-shadow: var(--shadow-sm); }
+
+.toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--line); }
+.toggle-row:last-child { border-bottom: none; }
+.toggle-row-label { font-size: 13.5px; font-weight: 600; }
+.toggle-row-sub { font-size: 11.5px; color: var(--text-faint); margin-top: 2px; }
+.switch { position: relative; display: inline-block; width: 42px; height: 24px; flex-shrink: 0; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.switch-track {
+  position: absolute; inset: 0; background: var(--line); border-radius: 999px; cursor: pointer; transition: background 0.15s;
+}
+.switch-track::before {
+  content: ""; position: absolute; width: 18px; height: 18px; left: 3px; top: 3px; background: #fff; border-radius: 50%;
+  transition: transform 0.15s; box-shadow: var(--shadow-sm);
+}
+.switch input:checked + .switch-track { background: var(--accent); }
+.switch input:checked + .switch-track::before { transform: translateX(18px); }
+
+.settings-save-bar {
+  position: sticky;
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  background: var(--bg-card);
+  border: 1px solid var(--card-border);
+  border-radius: 14px;
+  padding: 10px 12px;
+  box-shadow: var(--shadow-md);
+}
+.settings-save-bar .btn.primary { width: auto; padding: 9px 18px; }
+.settings-saved-note { font-size: 12px; color: var(--good); font-weight: 600; }
+
+.day-split-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; }
+.day-split-label { width: 40px; flex-shrink: 0; font-size: 12.5px; font-weight: 600; color: var(--text-dim); }
+.day-split-row select { flex: 1; margin: 0; }
