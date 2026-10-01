@@ -40,6 +40,10 @@ export default function FoodPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  const [insights, setInsights] = useState(null); // { items, notEnoughData } | null while loading
+  const [suggestion, setSuggestion] = useState(null); // { suggestion, notEnoughData } | null while loading
+  const [deciding, setDeciding] = useState(false);
+
   useEffect(() => {
     if (!profile) return;
     let cancelled = false;
@@ -56,6 +60,60 @@ export default function FoodPage() {
     });
     return () => { cancelled = true; };
   }, [profile]);
+
+  // Nutrition Gap & Suggestions and the Weekly Recalibration suggestion are
+  // both generated on-demand by their own API routes (not a cron) — calling
+  // them here means they're ready whenever there's something to say, instead
+  // of waiting on a schedule. Each is cheap to re-check: already-cached /
+  // already-decided state comes straight back without calling Claude again.
+  useEffect(() => {
+    if (!profile) return;
+    let cancelled = false;
+    (async () => {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) return;
+      const headers = { authorization: `Bearer ${token}` };
+      const [insightsRes, suggestionRes] = await Promise.all([
+        fetch("/api/nutrition-insights", { headers }).then((r) => r.json()).catch((e) => ({ error: e.message })),
+        fetch("/api/target-suggestions", { headers }).then((r) => r.json()).catch((e) => ({ error: e.message })),
+      ]);
+      if (cancelled) return;
+      setInsights(insightsRes.error ? { items: [], notEnoughData: true } : insightsRes);
+      setSuggestion(suggestionRes.error ? { suggestion: null } : suggestionRes);
+    })();
+    return () => { cancelled = true; };
+  }, [profile]);
+
+  async function decide(action) {
+    if (!suggestion?.suggestion || deciding) return;
+    setDeciding(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const res = await fetch("/api/target-suggestions", {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+        body: JSON.stringify({ id: suggestion.suggestion.id, action }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Couldn't save that.");
+      setSuggestion({ suggestion: json.suggestion });
+      if (action === "apply") {
+        const { data: targetRes } = await supabase
+          .from("weekly_targets")
+          .select("*")
+          .eq("user_id", profile.id)
+          .order("week_start", { ascending: false })
+          .limit(1);
+        setTarget((targetRes && targetRes[0]) || null);
+      }
+    } catch (e) {
+      setError(e.message || "Couldn't save that.");
+    } finally {
+      setDeciding(false);
+    }
+  }
 
   if (profileLoading || (profile && loading)) return <div className="center-loading">Loading…</div>;
 
@@ -101,6 +159,25 @@ export default function FoodPage() {
       <AppHeader title="Food" />
       {(error || profileError) && <div className="error-note">{error || profileError}</div>}
 
+      {suggestion?.suggestion?.status === "pending" && (
+        <div className="card recalibration-card">
+          <p className="eyebrow" style={{ marginBottom: 10 }}>Suggested Recalibration</p>
+          <div className="recalibration-targets">
+            <div className="recalibration-target"><span className="k">Calories</span><span className="v">{Math.round(suggestion.suggestion.suggested_daily_calorie_target)}</span></div>
+            <div className="recalibration-target"><span className="k">Protein</span><span className="v">{Math.round(suggestion.suggestion.suggested_daily_protein_target_g)}g</span></div>
+            <div className="recalibration-target"><span className="k">Carbs</span><span className="v">{Math.round(suggestion.suggestion.suggested_daily_carb_target_g)}g</span></div>
+            <div className="recalibration-target"><span className="k">Fat</span><span className="v">{Math.round(suggestion.suggestion.suggested_daily_fat_target_g)}g</span></div>
+          </div>
+          <p className="note" style={{ marginTop: 10 }}>{suggestion.suggestion.rationale}</p>
+          <div className="btn-row" style={{ marginTop: 10 }}>
+            <button className="btn primary" style={{ width: "auto", padding: "10px 18px" }} onClick={() => decide("apply")} disabled={deciding}>
+              {deciding ? "Saving…" : "Apply to next week"}
+            </button>
+            <button className="btn ghost" onClick={() => decide("dismiss")} disabled={deciding}>Keep current targets</button>
+          </div>
+        </div>
+      )}
+
       <div className="card">
         <p className="eyebrow" style={{ marginBottom: 10 }}>Today&rsquo;s Targets</p>
         {bar("Calories", todayCal, calTarget, "var(--fat)")}
@@ -141,6 +218,22 @@ export default function FoodPage() {
           <div className="note">Set a weekly calorie budget to see the week&rsquo;s trajectory here.</div>
         )}
       </div>
+
+      {insights?.items?.length > 0 && (
+        <div className="card">
+          <p className="eyebrow" style={{ marginBottom: 10 }}>Nutrition Gap &amp; Suggestions <span style={{ textTransform: "none", fontWeight: 400 }}>from what&rsquo;s actually been logged this week</span></p>
+          {insights.items.map((item, i) => (
+            <div className="insight-row" key={i}>
+              <div className="insight-icon">{item.icon}</div>
+              <div>
+                <div className="insight-title">{item.title}</div>
+                <div className="meal-desc">{item.detail}</div>
+                <div className="insight-suggestion">Suggestion: {item.suggestion}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="card">
         <p className="eyebrow" style={{ marginBottom: 10 }}>Today&rsquo;s Food Log</p>

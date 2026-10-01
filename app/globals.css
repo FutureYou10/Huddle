@@ -284,6 +284,21 @@ details.more summary::-webkit-details-marker { display: none; }
 .bar-fill { height: 100%; border-radius: 6px; }
 .bar-val { font-size: 11.5px; color: var(--text-faint); width: 130px; text-align: right; flex-shrink: 0; font-variant-numeric: tabular-nums; }
 
+/* A pending Weekly Recalibration — a suggestion, not a done deal, so it's
+   styled like an open question (accent border) rather than a flat card. */
+.recalibration-card { border: 1px solid var(--accent); }
+.recalibration-targets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.recalibration-target { background: var(--bg-raised); border-radius: 10px; padding: 8px 6px; text-align: center; }
+.recalibration-target .k { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-faint); font-weight: 600; margin-bottom: 3px; }
+.recalibration-target .v { font-family: var(--font-display); font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* One logged-data-backed nutrition gap + its suggestion. */
+.insight-row { display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.insight-row:last-child { border-bottom: none; padding-bottom: 0; }
+.insight-icon { font-size: 20px; flex-shrink: 0; width: 28px; text-align: center; }
+.insight-title { font-weight: 600; font-size: 13px; margin-bottom: 2px; }
+.insight-suggestion { font-size: 11.5px; color: var(--nutrition); margin-top: 4px; font-weight: 600; }
+
 /* Small status/flag badges (macro over/under, meal source tags) */
 .flag { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, transparent); padding: 3px 8px; border-radius: 20px; margin-top: 6px; margin-right: 6px; }
 .flag.bad { color: var(--bad); background: color-mix(in srgb, var(--bad) 12%, transparent); }
