@@ -528,6 +528,39 @@ details.more summary::-webkit-details-marker { display: none; }
   line-height: 1;
   cursor: pointer;
 }
+
+/* Recap — a Spotify-Wrapped-style swipeable stat deck. */
+.recap-overlay {
+  position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); z-index: 30;
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+.recap-panel {
+  width: 100%; max-width: 420px; max-height: min(86vh, 720px);
+  background: var(--bg-card); border-radius: 24px; box-shadow: var(--shadow-md);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.recap-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 18px 10px 10px 20px; flex-shrink: 0; }
+.recap-title { font-family: var(--font-display); font-size: 17px; font-weight: 700; }
+.recap-range { font-size: 11.5px; color: var(--text-faint); margin-top: 2px; }
+.recap-close { flex-shrink: 0; width: 36px; height: 36px; margin-right: 10px; display: flex; align-items: center; justify-content: center; border: none; border-radius: 50%; background: var(--bg-raised); color: var(--text-dim); font-size: 16px; line-height: 1; cursor: pointer; }
+.recap-empty { padding: 30px 24px 36px; text-align: center; color: var(--text-faint); font-size: 13px; }
+.recap-track {
+  display: flex; overflow-x: auto; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch;
+  padding: 8px 0 20px;
+}
+.recap-card {
+  flex: 0 0 100%; scroll-snap-align: center; box-sizing: border-box;
+  margin: 0 20px; padding: 36px 24px 30px; border-radius: 20px; border: 1.5px solid;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+  min-height: 220px;
+}
+.recap-card-icon { font-size: 34px; margin-bottom: 10px; }
+.recap-card-title { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; color: var(--text-dim); margin-bottom: 10px; }
+.recap-card-value { font-family: var(--font-display); font-size: 30px; font-weight: 700; line-height: 1.15; word-break: break-word; }
+.recap-card-sub { font-size: 12.5px; color: var(--text-dim); margin-top: 8px; }
+.recap-dots { display: flex; justify-content: center; gap: 6px; padding-bottom: 20px; flex-shrink: 0; }
+.recap-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--line); }
+.recap-dot.active { background: var(--accent); width: 16px; border-radius: 3px; }
 .coach-messages {
   flex: 1;
   overflow-y: auto;

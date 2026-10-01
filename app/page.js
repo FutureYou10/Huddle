@@ -14,6 +14,8 @@ import TrendLine from "../components/charts/TrendLine";
 import DayBoxGrid from "../components/charts/DayBoxGrid";
 import PhaseProgressChart from "../components/charts/PhaseProgressChart";
 import RingStat from "../components/charts/RingStat";
+import RecapModal from "../components/RecapModal";
+import { buildRecap, latestCompletedWeek, latestCompletedMonth } from "../lib/recap";
 
 const PACE_TAG_LABEL = { ahead: "Ahead of pace", ontrack: "On track", behind: "Behind pace", nodata: "Still building trend" };
 
@@ -33,9 +35,11 @@ export default function OverviewPage() {
   const [meals, setMeals] = useState([]);
   const [target, setTarget] = useState(null);
   const [sessions, setSessions] = useState([]);
+  const [workoutLog, setWorkoutLog] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [howOpen, setHowOpen] = useState(false);
+  const [recap, setRecap] = useState(null); // { key, title, rangeStart, rangeEnd, cards } | null
 
   useEffect(() => {
     if (!profile) return;
@@ -50,18 +54,50 @@ export default function OverviewPage() {
       supabase.from("food_log").select("*").eq("user_id", profile.id).gte("logged_at", since).order("logged_at", { ascending: true }),
       supabase.from("weekly_targets").select("*").eq("user_id", profile.id).order("week_start", { ascending: false }).limit(1),
       supabase.from("workout_sessions").select("*").eq("user_id", profile.id).gte("date", since),
-    ]).then(([m, f, t, s]) => {
+      supabase.from("workout_log").select("*").eq("user_id", profile.id).gte("date", since).order("date", { ascending: false }),
+    ]).then(([m, f, t, s, wl]) => {
       if (cancelled) return;
-      const err = m.error || f.error || t.error || s.error;
+      const err = m.error || f.error || t.error || s.error || wl.error;
       if (err) setError(err.message);
       setMetrics(m.data || []);
       setMeals(f.data || []);
       setTarget((t.data && t.data[0]) || null);
       setSessions(s.data || []);
+      setWorkoutLog(wl.data || []);
       setLoading(false);
     });
     return () => { cancelled = true; };
   }, [profile]);
+
+  // Auto-pop a recap the first time this loads after its period ends — a
+  // Sunday for the week just gone, the start of a new month for the month
+  // just gone — then remembers it's been shown so it doesn't nag every load.
+  // A completed-but-empty period is marked seen too, just never shown.
+  useEffect(() => {
+    if (!profile || loading) return;
+    try {
+      const today = todayIso();
+      const calTargetNow = target?.daily_calorie_target ?? null;
+      const week = latestCompletedWeek(today);
+      const weekKey = `huddle-recap-week-${profile.id}`;
+      if (localStorage.getItem(weekKey) !== week.end) {
+        localStorage.setItem(weekKey, week.end);
+        const cards = buildRecap({ meals, metrics, workoutLog, sessions, calTarget: calTargetNow, rangeStart: week.start, rangeEnd: week.end });
+        if (cards.length > 0) {
+          setRecap({ key: week.end, title: "Your Week", rangeStart: week.start, rangeEnd: week.end, cards });
+          return;
+        }
+      }
+      const month = latestCompletedMonth(today);
+      const monthKey = `huddle-recap-month-${profile.id}`;
+      if (localStorage.getItem(monthKey) !== month.key) {
+        localStorage.setItem(monthKey, month.key);
+        const cards = buildRecap({ meals, metrics, workoutLog, sessions, calTarget: calTargetNow, rangeStart: month.start, rangeEnd: month.end });
+        if (cards.length > 0) setRecap({ key: month.key, title: "Your Month", rangeStart: month.start, rangeEnd: month.end, cards });
+      }
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile, loading]);
 
   if (profileLoading || (profile && loading)) return <div className="center-loading">Loading…</div>;
 
@@ -89,6 +125,12 @@ export default function OverviewPage() {
   const bandPct = Number(profile?.nutrition_band_pct ?? 20);
   const bandLow = Math.round(100 - bandPct);
   const bandHigh = Math.round(100 + bandPct);
+
+  function openRecap(period) {
+    const range = period === "week" ? latestCompletedWeek(today) : latestCompletedMonth(today);
+    const cards = buildRecap({ meals, metrics, workoutLog, sessions, calTarget, rangeStart: range.start, rangeEnd: range.end });
+    setRecap({ key: range.key || range.end, title: period === "week" ? "Your Week" : "Your Month", rangeStart: range.start, rangeEnd: range.end, cards });
+  }
 
   const leanNow = latest ? deriveLeanMass(latest.weight, latest.body_fat) : null;
   const leanPrev = prev ? deriveLeanMass(prev.weight, prev.body_fat) : null;
@@ -172,6 +214,11 @@ export default function OverviewPage() {
     <div className="shell shell-with-nav">
       <AppHeader title="Overview" />
       {(error || profileError) && <div className="error-note">{error || profileError}</div>}
+
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <button type="button" className="btn secondary" style={{ width: "auto", padding: "8px 14px" }} onClick={() => openRecap("week")}>🎉 Weekly Recap</button>
+        <button type="button" className="btn secondary" style={{ width: "auto", padding: "8px 14px" }} onClick={() => openRecap("month")}>📅 Monthly Recap</button>
+      </div>
 
       <div className="card">
         <p className="eyebrow" style={{ marginBottom: 10 }}>Today</p>
@@ -385,6 +432,15 @@ export default function OverviewPage() {
           </div>
         </details>
       </div>
+
+      <RecapModal
+        open={!!recap}
+        onClose={() => setRecap(null)}
+        title={recap?.title}
+        rangeStart={recap?.rangeStart}
+        rangeEnd={recap?.rangeEnd}
+        cards={recap?.cards || []}
+      />
 
       <BottomNav />
     </div>
