@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
 import { fmtDate, todayIso, weekDates, dayTypeFor, DAY_LABELS } from "../../lib/coaching";
-import { pyramidTargets, groupSupersets, computeOverloadFlags, groupLogByExercise, stepSizeFor, maxWeightForExercise, strengthTrendPct } from "../../lib/training";
+import { pyramidTargets, groupSupersets, computeOverloadFlags, groupLogByExercise, stepSizeFor, maxWeightForExercise, strengthTrendPct, lastTimeNote } from "../../lib/training";
 import { EXTRA_ACTIVITY_TYPES, EFFORT_LEVELS, ASSUMED_BODYWEIGHT_KG, estimateExtraActivityKcal } from "../../lib/extraActivity";
 import { useProfile } from "../../lib/useProfile";
 import AppHeader from "../../components/AppHeader";
@@ -27,6 +27,7 @@ function ExerciseRow({ ex, formSets, onWeight, onReps, history }) {
   const last = history?.[0];
   const lastTop = last?.sets?.[last.sets.length - 1];
   const pr = history && history.length ? maxWeightForExercise(history) : null;
+  const ptNote = lastTimeNote(ex, history);
   return (
     <div className="exercise-row">
       <div className="exercise-top">
@@ -37,6 +38,7 @@ function ExerciseRow({ ex, formSets, onWeight, onReps, history }) {
           {pr && <> · <b style={{ color: "var(--accent)" }}>PR {pr.weight_kg}kg × {pr.reps}</b></>}
         </div>
       </div>
+      {ptNote && <div className="exercise-pt-note">💬 {ptNote}</div>}
       <div className="pyramid-sets">
         {Array.from({ length: ex.target_sets || 0 }, (_, s) => {
           const key = `${ex.id}-${s}`;

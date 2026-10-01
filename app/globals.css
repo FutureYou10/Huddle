@@ -396,6 +396,7 @@ details.more summary::-webkit-details-marker { display: none; }
 .exercise-row:last-child { border-bottom: none; }
 .exercise-top { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: baseline; margin-bottom: 6px; }
 .exercise-target { font-size: 11px; color: var(--text-faint); }
+.exercise-pt-note { font-size: 11.5px; font-style: italic; color: var(--text-dim); background: var(--bg-raised); border-left: 2px solid var(--accent); border-radius: 0 8px 8px 0; padding: 6px 10px; margin-bottom: 8px; }
 .pyramid-sets { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
 .pyramid-set-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 8px; background: var(--bg-raised); border-radius: 8px; }
 .pyramid-set-row .set-no { font-size: 11px; color: var(--text-dim); min-width: 100px; }
