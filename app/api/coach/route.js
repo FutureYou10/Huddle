@@ -47,7 +47,10 @@ export async function POST(request) {
 
     const contextText = await buildContext(supabase, userId, coach, profile);
     const system = systemPromptFor(coach, contextText, profile);
-    const tools = coach === "nutritionist" ? [TOOLS.log_meal] : undefined;
+    // log_meal is available from any of the three coach chats, not just the
+    // Nutritionist's — Harry shouldn't have to switch tabs just to log food
+    // he mentions mid-conversation with the Transformation Coach or Trainer.
+    const tools = [TOOLS.log_meal];
     const messages = [...history, { role: "user", content: message.trim() }];
 
     let response = await callClaude({ system, messages, tools });
