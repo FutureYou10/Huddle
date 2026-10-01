@@ -25,6 +25,7 @@ export default function CoachPanel({ open, onClose }) {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
+  const [speakingId, setSpeakingId] = useState(null);
   const scrollRef = useRef(null);
 
   useEffect(() => {
@@ -36,6 +37,40 @@ export default function CoachPanel({ open, onClose }) {
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [threads, tab, sending, open]);
+
+  // Stop any reply being read aloud when the panel closes or the coach tab
+  // changes — nothing should keep talking once you've left that thread.
+  useEffect(() => {
+    if (!open && typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+      setSpeakingId(null);
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+    }
+    setSpeakingId(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
+
+  // Read a coach reply aloud with the browser's built-in voice — free, and
+  // well supported in Safari/iOS, unlike in-browser speech-to-text. Tapping
+  // the same reply again stops it.
+  function toggleSpeak(id, text) {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel();
+    if (speakingId === id) {
+      setSpeakingId(null);
+      return;
+    }
+    const utterance = new window.SpeechSynthesisUtterance(text);
+    utterance.onend = () => setSpeakingId((cur) => (cur === id ? null : cur));
+    utterance.onerror = () => setSpeakingId((cur) => (cur === id ? null : cur));
+    setSpeakingId(id);
+    window.speechSynthesis.speak(utterance);
+  }
 
   async function loadThread(coach) {
     setLoadingTab((s) => ({ ...s, [coach]: true }));
@@ -111,9 +146,34 @@ export default function CoachPanel({ open, onClose }) {
         <div className="coach-messages" ref={scrollRef}>
           {loadingTab[tab] && list.length === 0 && <div className="coach-greeting">Loading…</div>}
           {!loadingTab[tab] && list.length === 0 && <div className="coach-greeting">{GREETING[tab]}</div>}
-          {list.map((m) => (
-            <div key={m.id} className={`coach-msg coach-msg-${m.role}`}>{m.body}</div>
-          ))}
+          {list.map((m) =>
+            m.role === "assistant" ? (
+              <div key={m.id} className="coach-msg-row">
+                <div className="coach-msg coach-msg-assistant">{m.body}</div>
+                <button
+                  type="button"
+                  className={`coach-speak${speakingId === m.id ? " active" : ""}`}
+                  onClick={() => toggleSpeak(m.id, m.body)}
+                  aria-label={speakingId === m.id ? "Stop reading aloud" : "Read reply aloud"}
+                >
+                  {speakingId === m.id ? (
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                      <rect x="6" y="6" width="12" height="12" rx="2" />
+                    </svg>
+                  ) : (
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                      <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                      <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                    </svg>
+                  )}
+                  {speakingId === m.id ? "Stop" : "Listen"}
+                </button>
+              </div>
+            ) : (
+              <div key={m.id} className={`coach-msg coach-msg-${m.role}`}>{m.body}</div>
+            )
+          )}
           {sending && <div className="coach-msg coach-msg-assistant coach-msg-typing">…</div>}
         </div>
 
