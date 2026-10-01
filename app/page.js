@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import {
   fmtDate, fmtDateLong, fmtWeight, todayIso, addDays, weekDates, dayTypeFor,
@@ -332,24 +332,30 @@ export default function OverviewPage() {
       <div className="card">
         <details className="more">
           <summary style={{ cursor: "pointer", fontFamily: "var(--font-display)", fontSize: 13, textTransform: "uppercase", color: "var(--text-dim)" }}>
-            Log <span className="meal-desc" style={{ textTransform: "none" }}>({logRows.length} days — tap to show)</span>
+            Full Log <span className="meal-desc" style={{ textTransform: "none" }}>({logRows.length} days — tap to show)</span>
           </summary>
           <div className="log-wrap chart-scroll" style={{ marginTop: 12 }}>
             <table style={{ minWidth: 640 }}>
-              <thead><tr><th>Date</th><th>Weight</th><th>Body Fat</th><th>Lean Mass</th><th>Fat Mass</th><th>Steps</th><th>Cal In</th><th>Protein</th><th>Notes</th></tr></thead>
+              <thead><tr><th>Date</th><th>Weight</th><th>Body Fat</th><th>Lean Mass</th><th>Fat Mass</th><th>Steps</th><th>Cal In</th><th>Protein</th></tr></thead>
               <tbody>
                 {logRows.map((r) => (
-                  <tr key={r.date}>
-                    <td>{fmtDate(r.date)}</td>
-                    <td>{r.weight ?? "—"}</td>
-                    <td>{r.body_fat != null ? `${r.body_fat}%` : "—"}</td>
-                    <td>{r.weight != null && r.body_fat != null ? deriveLeanMass(r.weight, r.body_fat).toFixed(1) : "—"}</td>
-                    <td>{r.fatMass != null ? r.fatMass.toFixed(1) : "—"}</td>
-                    <td>{r.steps ?? "—"}</td>
-                    <td>{r.calories != null ? Math.round(r.calories) : "—"}</td>
-                    <td>{r.protein != null ? `${Math.round(r.protein)}g` : "—"}</td>
-                    <td className="notes">{r.notes || ""}</td>
-                  </tr>
+                  <Fragment key={r.date}>
+                    <tr>
+                      <td>{fmtDate(r.date)}</td>
+                      <td>{r.weight ?? "—"}</td>
+                      <td>{r.body_fat != null ? `${r.body_fat}%` : "—"}</td>
+                      <td>{r.weight != null && r.body_fat != null ? deriveLeanMass(r.weight, r.body_fat).toFixed(1) : "—"}</td>
+                      <td>{r.fatMass != null ? r.fatMass.toFixed(1) : "—"}</td>
+                      <td>{r.steps ?? "—"}</td>
+                      <td>{r.calories != null ? Math.round(r.calories) : "—"}</td>
+                      <td>{r.protein != null ? `${Math.round(r.protein)}g` : "—"}</td>
+                    </tr>
+                    {r.notes && (
+                      <tr className="log-notes-row">
+                        <td colSpan={8}>📝 {r.notes}</td>
+                      </tr>
+                    )}
+                  </Fragment>
                 ))}
               </tbody>
             </table>

@@ -290,6 +290,14 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
    their own box instead of pushing the page sideways. */
 .chart-scroll, .phase-chart-wrap { overflow-x: auto; }
 
+/* Log table: a day's own note reads better as a full-width line under that
+   day's stats than crammed into its own narrow column. */
+.log-wrap table { border-collapse: collapse; width: 100%; }
+.log-wrap th, .log-wrap td { padding: 6px 8px; text-align: left; font-size: 11.5px; white-space: nowrap; }
+.log-wrap th { color: var(--text-faint); font-weight: 600; text-transform: uppercase; font-size: 10px; letter-spacing: 0.03em; border-bottom: 1px solid var(--line); }
+.log-wrap tbody tr:not(.log-notes-row) { border-bottom: 1px solid var(--line); }
+.log-notes-row td { padding: 2px 8px 8px; white-space: normal; font-size: 11px; color: var(--text-dim); font-style: italic; border-bottom: 1px solid var(--line); }
+
 /* Pace tag (goal-projection hero) */
 .pace-tag {
   display: inline-block;
