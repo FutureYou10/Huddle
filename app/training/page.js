@@ -111,6 +111,19 @@ export default function TrainingPage() {
     }
     return list.sort((a, b) => b.hist.length - a.hist.length).slice(0, 4);
   }, [logByExercise]);
+  // A PB tile per exercise, shown from the very first session logged — unlike
+  // Key Lift Progress above, which waits for a trend (2+ sessions) before it
+  // has a chart worth drawing.
+  const strengthBoard = useMemo(() => {
+    const list = [];
+    for (const [exercise, hist] of logByExercise.entries()) {
+      if (!hist.length) continue;
+      const pr = maxWeightForExercise(hist);
+      if (!pr) continue;
+      list.push({ exercise, pr, sessionCount: hist.length });
+    }
+    return list.sort((a, b) => a.exercise.localeCompare(b.exercise));
+  }, [logByExercise]);
 
   useEffect(() => {
     const init = {};
@@ -230,6 +243,22 @@ export default function TrainingPage() {
           })}
         </div>
       </div>
+
+      {strengthBoard.length > 0 && (
+        <div className="card">
+          <p className="eyebrow" style={{ marginBottom: 10 }}>Strength Scoreboard</p>
+          <div className="scoreboard-grid">
+            {strengthBoard.map((s) => (
+              <div className="scoreboard-tile" key={s.exercise}>
+                <div className="scoreboard-name">{s.exercise}</div>
+                <div className="scoreboard-value">{s.pr.weight_kg}<span className="scoreboard-unit">kg</span></div>
+                <div className="scoreboard-sub">top set × {s.pr.reps} reps</div>
+                <div className="scoreboard-status">{s.sessionCount === 1 ? "First session logged" : `${s.sessionCount} sessions logged`}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {overloadFlags.length > 0 && (
         <div className="card">
