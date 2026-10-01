@@ -56,7 +56,8 @@ export async function GET(request) {
     if (profileErr) throw profileErr;
 
     const { contextText, loggedDayCount } = await buildRecalibrationContext(supabase, userId, profile, weekStart);
-    if (loggedDayCount < MIN_LOGGED_DAYS) {
+    const minLoggedDays = Number(profile?.recalibration_min_logged_days ?? MIN_LOGGED_DAYS);
+    if (loggedDayCount < minLoggedDays) {
       return NextResponse.json({ suggestion: null, notEnoughData: true });
     }
 

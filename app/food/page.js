@@ -139,7 +139,8 @@ export default function FoodPage() {
   const weekAvgProtein = weekLoggedDays.length ? weekLoggedDays.reduce((s, d) => s + proteinByDay.get(d), 0) / weekLoggedDays.length : null;
   // Today is still in progress — grading it against the full daily target
   // would read as a miss purely because the day isn't over yet.
-  const weekOnTargetDays = calTarget != null ? weekLoggedDays.filter((d) => d < today && isCalorieDayOnTarget(calByDay.get(d), calTarget)).length : 0;
+  const bandPct = Number(profile?.nutrition_band_pct ?? 20);
+  const weekOnTargetDays = calTarget != null ? weekLoggedDays.filter((d) => d < today && isCalorieDayOnTarget(calByDay.get(d), calTarget, bandPct)).length : 0;
   const weekBudget = target?.weekly_calorie_budget ?? (calTarget != null ? calTarget * 7 : null);
   const weekSpent = weekLoggedDays.reduce((s, d) => s + calByDay.get(d), 0);
   const weekPaceSoFar = weekBudget != null ? (weekBudget / 7) * weekLoggedDays.length : null;

@@ -24,10 +24,15 @@ export async function GET(request) {
 
   const results = [];
   for (const profile of (profiles || []).filter(isOnboarded)) {
+    // Per-user cadence setting from Settings — off by his own choice, not an error.
+    if (profile.daily_checkin_enabled === false) {
+      results.push({ userId: profile.id, ok: true, skipped: "daily_checkin_disabled" });
+      continue;
+    }
     try {
       const contextText = await buildContext(supabase, profile.id, "transformation", profile);
       const response = await callClaude({
-        system: dailyCheckinPrompt(contextText),
+        system: dailyCheckinPrompt(contextText, profile),
         messages: [{ role: "user", content: "Write today's check-in." }],
         maxTokens: 300,
       });

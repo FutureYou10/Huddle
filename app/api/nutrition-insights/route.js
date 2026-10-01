@@ -40,8 +40,12 @@ export async function GET(request) {
     if (existingErr) throw existingErr;
     if (existing) return NextResponse.json({ asOf: existing.as_of, items: existing.items, cached: true });
 
+    const { data: profile, error: profileErr } = await supabase.from("profiles").select("nutrition_insights_min_logged_days").eq("id", userId).maybeSingle();
+    if (profileErr) throw profileErr;
+
     const { contextText, loggedDayCount } = await buildNutritionInsightsContext(supabase, userId);
-    if (loggedDayCount < MIN_LOGGED_DAYS) {
+    const minLoggedDays = Number(profile?.nutrition_insights_min_logged_days ?? MIN_LOGGED_DAYS);
+    if (loggedDayCount < minLoggedDays) {
       return NextResponse.json({ asOf: today, items: [], notEnoughData: true });
     }
 

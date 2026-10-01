@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import {
-  fmtDate, fmtDateLong, todayIso, addDays, weekDates, dayTypeFor,
+  fmtDate, fmtDateLong, fmtWeight, todayIso, addDays, weekDates, dayTypeFor,
   deriveLeanMass, deriveFatMass, requiredPace, fatMassTrend, paceTag, phaseProgress, isCalorieDayOnTarget,
 } from "../lib/coaching";
 import { useProfile } from "../lib/useProfile";
@@ -81,6 +81,9 @@ export default function OverviewPage() {
 
   const calTarget = target?.daily_calorie_target ?? null;
   const proteinTarget = target?.daily_protein_target_g ?? null;
+  const bandPct = Number(profile?.nutrition_band_pct ?? 20);
+  const bandLow = Math.round(100 - bandPct);
+  const bandHigh = Math.round(100 + bandPct);
 
   const leanNow = latest ? deriveLeanMass(latest.weight, latest.body_fat) : null;
   const leanPrev = prev ? deriveLeanMass(prev.weight, prev.body_fat) : null;
@@ -132,7 +135,7 @@ export default function OverviewPage() {
     let status = "";
     if (d === today) status = "today";
     else if (calByDay.has(d) && calTarget != null) {
-      status = isCalorieDayOnTarget(calByDay.get(d), calTarget) ? "fooddone" : "miss";
+      status = isCalorieDayOnTarget(calByDay.get(d), calTarget, bandPct) ? "fooddone" : "miss";
     }
     foodDaysAll.push({ date: d, status, title: `${fmtDate(d)}${calByDay.has(d) ? ` · ${Math.round(calByDay.get(d))} kcal` : ""}` });
   }
@@ -187,7 +190,7 @@ export default function OverviewPage() {
         <div className="stat-row">
           <div className="stat">
             <div className="k">Weight</div>
-            <div className="v">{latest?.weight ?? "—"} <span style={{ fontSize: 12, color: "var(--text-faint)" }}>→ {profile?.goal_weight ?? "—"}</span></div>
+            <div className="v">{latest?.weight != null ? fmtWeight(latest.weight, profile?.units) : "—"} <span style={{ fontSize: 12, color: "var(--text-faint)" }}>→ {profile?.goal_weight != null ? fmtWeight(profile.goal_weight, profile?.units) : "—"}</span></div>
             {prev && latest && <div className="meal-desc">{(latest.weight - prev.weight >= 0 ? "+" : "")}{(latest.weight - prev.weight).toFixed(1)} vs last reading</div>}
           </div>
           <div className="stat">
@@ -320,7 +323,7 @@ export default function OverviewPage() {
 
       <div className="card">
         <h3 style={{ fontFamily: "var(--font-display)", fontSize: 13, textTransform: "uppercase", color: "var(--text-dim)", marginBottom: 12 }}>
-          Food Discipline <span className="meal-desc">on target = within 80–120% of the live daily target</span>
+          Food Discipline <span className="meal-desc">on target = within {bandLow}–{bandHigh}% of the live daily target</span>
         </h3>
         <DayBoxGrid days={foodDaysAll} />
         <div className="empty-state" style={{ paddingTop: 10 }}><b>{foodOnTargetCount} of {foodGradedCount}</b> completed days on target so far</div>

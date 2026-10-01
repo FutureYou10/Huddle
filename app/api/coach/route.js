@@ -46,7 +46,7 @@ export async function POST(request) {
     const history = (historyRows || []).slice().reverse().map((r) => ({ role: r.role, content: r.body }));
 
     const contextText = await buildContext(supabase, userId, coach, profile);
-    const system = systemPromptFor(coach, contextText);
+    const system = systemPromptFor(coach, contextText, profile);
     const tools = coach === "nutritionist" ? [TOOLS.log_meal] : undefined;
     const messages = [...history, { role: "user", content: message.trim() }];
 

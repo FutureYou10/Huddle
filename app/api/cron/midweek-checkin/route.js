@@ -23,10 +23,15 @@ export async function GET(request) {
 
   const results = [];
   for (const profile of (profiles || []).filter(isOnboarded)) {
+    // Per-user cadence setting from Settings — off by his own choice, not an error.
+    if (profile.midweek_checkin_enabled === false) {
+      results.push({ userId: profile.id, ok: true, skipped: "midweek_checkin_disabled" });
+      continue;
+    }
     try {
       const contextText = await buildMidweekContext(supabase, profile.id);
       const response = await callClaude({
-        system: midweekCheckinPrompt(contextText),
+        system: midweekCheckinPrompt(contextText, profile),
         messages: [{ role: "user", content: "Write this week's check-in." }],
         maxTokens: 300,
       });
