@@ -91,6 +91,7 @@ export default function CoachPanel({ open, onClose }) {
   return (
     <div className="coach-overlay" onClick={onClose}>
       <div className="coach-panel" onClick={(e) => e.stopPropagation()}>
+        <div className="coach-handle" />
         <div className="coach-panel-head">
           <div className="coach-tabs">
             {TABS.map((t) => (
@@ -119,22 +120,27 @@ export default function CoachPanel({ open, onClose }) {
         {error && <div className="error-note" style={{ margin: "0 14px 8px" }}>{error}</div>}
 
         <div className="coach-input-row">
-          <textarea
-            className="coach-input"
-            rows={1}
-            placeholder={tab === "nutritionist" ? "Tell me what you ate…" : "Message your coach…"}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                send();
-              }
-            }}
-          />
-          <button type="button" className="coach-send" onClick={send} disabled={sending || !input.trim()}>
-            Send
-          </button>
+          <div className="coach-input-wrap">
+            <textarea
+              className="coach-input"
+              rows={1}
+              placeholder={tab === "nutritionist" ? "Tell me what you ate…" : "Message your coach…"}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  send();
+                }
+              }}
+            />
+            <button type="button" className="coach-send" onClick={send} disabled={sending || !input.trim()} aria-label="Send message">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 19V5" />
+                <path d="M6 11l6-6 6 6" />
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
     </div>
