@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import {
   fmtDate, fmtDateLong, todayIso, addDays, weekDates, dayTypeFor,
-  deriveLeanMass, deriveFatMass, requiredPace, fatMassTrend, paceTag, phaseProgress,
+  deriveLeanMass, deriveFatMass, requiredPace, fatMassTrend, paceTag, phaseProgress, isCalorieDayOnTarget,
 } from "../lib/coaching";
 import { useProfile } from "../lib/useProfile";
 import AppHeader from "../components/AppHeader";
@@ -132,7 +132,7 @@ export default function OverviewPage() {
     let status = "";
     if (d === today) status = "today";
     else if (calByDay.has(d) && calTarget != null) {
-      status = Math.abs(calByDay.get(d) - calTarget) <= 100 ? "fooddone" : "miss";
+      status = isCalorieDayOnTarget(calByDay.get(d), calTarget) ? "fooddone" : "miss";
     }
     foodDaysAll.push({ date: d, status, title: `${fmtDate(d)}${calByDay.has(d) ? ` · ${Math.round(calByDay.get(d))} kcal` : ""}` });
   }
@@ -320,7 +320,7 @@ export default function OverviewPage() {
 
       <div className="card">
         <h3 style={{ fontFamily: "var(--font-display)", fontSize: 13, textTransform: "uppercase", color: "var(--text-dim)", marginBottom: 12 }}>
-          Food Discipline <span className="meal-desc">on target = within ±100 kcal of the live daily target</span>
+          Food Discipline <span className="meal-desc">on target = within 80–120% of the live daily target</span>
         </h3>
         <DayBoxGrid days={foodDaysAll} />
         <div className="empty-state" style={{ paddingTop: 10 }}><b>{foodOnTargetCount} of {foodGradedCount}</b> completed days on target so far</div>

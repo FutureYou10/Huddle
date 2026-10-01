@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
-import { fmtDate, todayIso, weekDates } from "../../lib/coaching";
+import { fmtDate, todayIso, weekDates, isCalorieDayOnTarget } from "../../lib/coaching";
 import { useProfile } from "../../lib/useProfile";
 import AppHeader from "../../components/AppHeader";
 import BottomNav from "../../components/BottomNav";
@@ -137,7 +137,9 @@ export default function FoodPage() {
 
   const weekLoggedDays = wDays.filter((d) => d <= today && calByDay.has(d));
   const weekAvgProtein = weekLoggedDays.length ? weekLoggedDays.reduce((s, d) => s + proteinByDay.get(d), 0) / weekLoggedDays.length : null;
-  const weekOnTargetDays = calTarget != null ? weekLoggedDays.filter((d) => Math.abs(calByDay.get(d) - calTarget) <= 100).length : 0;
+  // Today is still in progress — grading it against the full daily target
+  // would read as a miss purely because the day isn't over yet.
+  const weekOnTargetDays = calTarget != null ? weekLoggedDays.filter((d) => d < today && isCalorieDayOnTarget(calByDay.get(d), calTarget)).length : 0;
   const weekBudget = target?.weekly_calorie_budget ?? (calTarget != null ? calTarget * 7 : null);
   const weekSpent = weekLoggedDays.reduce((s, d) => s + calByDay.get(d), 0);
   const weekPaceSoFar = weekBudget != null ? (weekBudget / 7) * weekLoggedDays.length : null;
