@@ -131,7 +131,9 @@ export async function POST(request) {
           daily_carb_target_g: suggestion.suggested_daily_carb_target_g,
           daily_fat_target_g: suggestion.suggested_daily_fat_target_g,
           weekly_calorie_budget: suggestion.suggested_weekly_calorie_budget,
-          basis: "weekly_recalibration",
+          // Keep the actual reasoning, not a generic label — matches how
+          // targets set before the app existed recorded their own basis.
+          basis: suggestion.rationale || "weekly_recalibration",
         },
         { onConflict: "user_id,week_start" }
       );
