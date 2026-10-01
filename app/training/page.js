@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
 import { fmtDate, todayIso, weekDates, dayTypeFor, DAY_LABELS } from "../../lib/coaching";
 import { pyramidTargets, groupSupersets, computeOverloadFlags, groupLogByExercise, stepSizeFor, maxWeightForExercise, strengthTrendPct } from "../../lib/training";
+import { EXTRA_ACTIVITY_TYPES, EFFORT_LEVELS, ASSUMED_BODYWEIGHT_KG, estimateExtraActivityKcal } from "../../lib/extraActivity";
 import { useProfile } from "../../lib/useProfile";
 import AppHeader from "../../components/AppHeader";
 import BottomNav from "../../components/BottomNav";
@@ -79,6 +80,7 @@ export default function TrainingPage() {
   const [logRows, setLogRows] = useState([]);
   const [sessions, setSessions] = useState([]);
   const [extras, setExtras] = useState([]);
+  const [latestWeightLb, setLatestWeightLb] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedDate, setSelectedDate] = useState(todayIso());
@@ -87,20 +89,25 @@ export default function TrainingPage() {
   const [complete, setComplete] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
+  const [extraType, setExtraType] = useState(EXTRA_ACTIVITY_TYPES[0].key);
+  const [extraMinutes, setExtraMinutes] = useState(45);
+  const [extraEffort, setExtraEffort] = useState("moderate");
 
   async function loadAll(userId) {
-    const [planRes, logRes, sessRes, extraRes] = await Promise.all([
+    const [planRes, logRes, sessRes, extraRes, weightRes] = await Promise.all([
       supabase.from("workout_plan").select("*").eq("user_id", userId).order("day_type", { ascending: true }).order("order_index", { ascending: true }),
       supabase.from("workout_log").select("*").eq("user_id", userId).order("date", { ascending: false }).limit(600),
       supabase.from("workout_sessions").select("*").eq("user_id", userId).order("date", { ascending: false }).limit(120),
       supabase.from("workout_extras").select("*").eq("user_id", userId).order("date", { ascending: false }).limit(60),
+      supabase.from("daily_metrics").select("weight").eq("user_id", userId).not("weight", "is", null).order("date", { ascending: false }).limit(1),
     ]);
-    const err = planRes.error || logRes.error || sessRes.error || extraRes.error;
+    const err = planRes.error || logRes.error || sessRes.error || extraRes.error || weightRes.error;
     if (err) setError(err.message);
     setPlan(planRes.data || []);
     setLogRows(logRes.data || []);
     setSessions(sessRes.data || []);
     setExtras(extraRes.data || []);
+    setLatestWeightLb((weightRes.data && weightRes.data[0]?.weight) ?? null);
     setLoading(false);
   }
 
@@ -263,6 +270,21 @@ export default function TrainingPage() {
     await loadAll(profile.id);
   }
 
+  // Weight for the kcal estimate: most recent real weigh-in, falling back to
+  // the start weight from onboarding, and only to an assumed figure (flagged
+  // in the UI) if neither exists yet.
+  const weightLbForEstimate = latestWeightLb ?? profile?.start_weight ?? null;
+  const weightKg = weightLbForEstimate != null ? weightLbForEstimate * 0.453592 : ASSUMED_BODYWEIGHT_KG;
+  const weightIsAssumed = weightLbForEstimate == null;
+  const extraEstimate = estimateExtraActivityKcal(extraType, extraEffort, extraMinutes, weightKg);
+
+  async function handleLogExtra() {
+    const activity = EXTRA_ACTIVITY_TYPES.find((a) => a.key === extraType);
+    const effort = EFFORT_LEVELS.find((e) => e.key === extraEffort);
+    const label = `${activity?.label || "Activity"} · ${extraMinutes}min · ${effort?.label.split(" — ")[0] || extraEffort}`;
+    await logExtra(label, extraEstimate?.low ?? null, extraEstimate?.high ?? null);
+  }
+
   const wDays = weekDates(todayIso());
   const today = todayIso();
   const extrasForDay = extras.filter((e) => e.date === selectedDate);
@@ -373,7 +395,28 @@ export default function TrainingPage() {
               <button className="btn ghost" style={{ width: "auto" }} onClick={() => removeExtra(ex.id)}>Remove</button>
             </div>
           ))}
-          <button className="btn secondary" style={{ width: "auto", padding: "8px 14px", marginTop: 6 }} onClick={() => logExtra("Blaze class", 500, 500)}>🔥 Log a Blaze class</button>
+          <div className="extra-activity-form">
+            <div className="field-row">
+              <select value={extraType} onChange={(e) => setExtraType(e.target.value)}>
+                {EXTRA_ACTIVITY_TYPES.map((a) => <option key={a.key} value={a.key}>{a.label}</option>)}
+              </select>
+              <select value={extraEffort} onChange={(e) => setExtraEffort(e.target.value)}>
+                {EFFORT_LEVELS.map((lvl) => <option key={lvl.key} value={lvl.key}>{lvl.label}</option>)}
+              </select>
+            </div>
+            <div className="extra-activity-row">
+              <div className="stepper-wrap">
+                <button type="button" className="stepper-btn" onClick={() => setExtraMinutes((m) => Math.max(5, m - 5))}>−</button>
+                <input type="number" value={extraMinutes} onChange={(e) => setExtraMinutes(Math.max(0, Number(e.target.value) || 0))} />
+                <button type="button" className="stepper-btn" onClick={() => setExtraMinutes((m) => m + 5)}>+</button>
+                <span className="unit-label">min</span>
+              </div>
+              {extraEstimate && (
+                <span className="meal-desc">≈ {extraEstimate.low}–{extraEstimate.high} kcal{weightIsAssumed ? " (assumed bodyweight)" : ""}</span>
+              )}
+            </div>
+            <button className="btn secondary" style={{ width: "auto", padding: "8px 14px", marginTop: 8 }} onClick={handleLogExtra}>🔥 Log activity</button>
+          </div>
         </div>
       </div>
 
