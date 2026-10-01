@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
-import { fmtDate, todayIso, weekDates, isCalorieDayOnTarget } from "../../lib/coaching";
+import { fmtDate, todayIso, weekDates, weekdayIndex, dayTypeFor, isCalorieDayOnTarget } from "../../lib/coaching";
 import { useProfile } from "../../lib/useProfile";
 import AppHeader from "../../components/AppHeader";
 import BottomNav from "../../components/BottomNav";
@@ -37,6 +37,7 @@ export default function FoodPage() {
   const { loading: profileLoading, profile, error: profileError } = useProfile();
   const [target, setTarget] = useState(null);
   const [meals, setMeals] = useState([]);
+  const [weekSessions, setWeekSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -47,15 +48,19 @@ export default function FoodPage() {
   useEffect(() => {
     if (!profile) return;
     let cancelled = false;
+    const wDays = weekDates(todayIso());
     Promise.all([
       supabase.from("weekly_targets").select("*").eq("user_id", profile.id).order("week_start", { ascending: false }).limit(1),
       supabase.from("food_log").select("*").eq("user_id", profile.id).order("logged_at", { ascending: false }).limit(120),
-    ]).then(([targetRes, mealsRes]) => {
+      supabase.from("workout_sessions").select("*").eq("user_id", profile.id).gte("date", wDays[0]).lte("date", wDays[6]),
+    ]).then(([targetRes, mealsRes, sessionsRes]) => {
       if (cancelled) return;
       if (targetRes.error) setError(targetRes.error.message);
       if (mealsRes.error) setError(mealsRes.error.message);
+      if (sessionsRes.error) setError(sessionsRes.error.message);
       setTarget((targetRes.data && targetRes.data[0]) || null);
       setMeals(mealsRes.data || []);
+      setWeekSessions(sessionsRes.data || []);
       setLoading(false);
     });
     return () => { cancelled = true; };
@@ -141,10 +146,28 @@ export default function FoodPage() {
   // would read as a miss purely because the day isn't over yet.
   const bandPct = Number(profile?.nutrition_band_pct ?? 20);
   const weekOnTargetDays = calTarget != null ? weekLoggedDays.filter((d) => d < today && isCalorieDayOnTarget(calByDay.get(d), calTarget, bandPct)).length : 0;
+
+  // Pacing is measured against real calendar time elapsed this week (Monday
+  // through today, inclusive), not just days that happen to have a log —
+  // a genuine "progress vs time gone" tracker rather than one that quietly
+  // skips a day you forgot to log.
+  const daysElapsed = weekdayIndex(today) + 1;
+  const daysSoFar = wDays.filter((d) => d <= today);
   const weekBudget = target?.weekly_calorie_budget ?? (calTarget != null ? calTarget * 7 : null);
-  const weekSpent = weekLoggedDays.reduce((s, d) => s + calByDay.get(d), 0);
-  const weekPaceSoFar = weekBudget != null ? (weekBudget / 7) * weekLoggedDays.length : null;
+  const weekSpent = daysSoFar.reduce((s, d) => s + (calByDay.get(d) || 0), 0);
+  const weekPaceSoFar = weekBudget != null ? (weekBudget / 7) * daysElapsed : null;
   const weekDelta = weekPaceSoFar != null ? weekSpent - weekPaceSoFar : null;
+
+  const weeklyProteinTarget = proteinTarget != null ? proteinTarget * 7 : null;
+  const weekProteinSpent = daysSoFar.reduce((s, d) => s + (proteinByDay.get(d) || 0), 0);
+  const weekProteinPaceSoFar = weeklyProteinTarget != null ? (weeklyProteinTarget / 7) * daysElapsed : null;
+  const weekProteinDelta = weekProteinPaceSoFar != null ? weekProteinSpent - weekProteinPaceSoFar : null;
+
+  const trainingDaysPlannedSoFar = daysSoFar.filter((d) => {
+    const dt = dayTypeFor(profile, d);
+    return dt && dt !== "Rest";
+  }).length;
+  const sessionsDoneThisWeek = weekSessions.filter((s) => s.complete).length;
 
   function bar(label, value, targetVal, color) {
     const pct = targetVal ? Math.min(100, (value / targetVal) * 100) : 0;
@@ -190,26 +213,27 @@ export default function FoodPage() {
         {todayFiber > 0 && <div className="meal-desc" style={{ marginTop: 8 }}>Fibre today: {Math.round(todayFiber)}g</div>}
       </div>
 
+      <p className="meal-desc" style={{ marginBottom: 6 }}>This week so far · day {daysElapsed} of 7</p>
       <div className="grid4" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 4 }}>
         <div className="stat">
-          <div className="k">Week vs Budget</div>
+          <div className="k">Calories vs Pace</div>
           <div className="v">{weekDelta != null ? `${weekDelta >= 0 ? "+" : ""}${Math.round(weekDelta)}` : "—"}</div>
           <div className="meal-desc">{weekDelta != null ? (weekDelta >= 0 ? "over pace" : "under pace") : "no budget set"}</div>
         </div>
         <div className="stat">
-          <div className="k">Protein Avg</div>
-          <div className="v">{weekAvgProtein != null ? Math.round(weekAvgProtein) : "—"}g</div>
-          <div className="meal-desc">this week so far</div>
+          <div className="k">Protein vs Pace</div>
+          <div className="v">{weekProteinDelta != null ? `${weekProteinDelta >= 0 ? "+" : ""}${Math.round(weekProteinDelta)}g` : "—"}</div>
+          <div className="meal-desc">{weekAvgProtein != null ? `avg ${Math.round(weekAvgProtein)}g/day` : "no target set"}</div>
+        </div>
+        <div className="stat">
+          <div className="k">Sessions</div>
+          <div className="v">{sessionsDoneThisWeek} / {trainingDaysPlannedSoFar}</div>
+          <div className="meal-desc">trained this week</div>
         </div>
         <div className="stat">
           <div className="k">On Target</div>
           <div className="v">{weekOnTargetDays} / {weekLoggedDays.length}</div>
           <div className="meal-desc">days this week</div>
-        </div>
-        <div className="stat">
-          <div className="k">Logged Today</div>
-          <div className="v">{todaysMeals.length}</div>
-          <div className="meal-desc">meal{todaysMeals.length === 1 ? "" : "s"}</div>
         </div>
       </div>
 
