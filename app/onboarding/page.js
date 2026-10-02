@@ -14,7 +14,17 @@ import { previewPlanDays, generatePlan, dayTypeNamesFor } from "../../lib/planGe
 import { EXERCISES } from "../../lib/exerciseLibrary";
 import { ACTIVITY_LEVELS, estimateDayOneTargets } from "../../lib/onboardingNutrition";
 
-const STEPS = ["about", "weighin", "goal", "numbers", "training", "split", "exclusions", "experience", "review"];
+const STEPS = ["about", "weighin", "goal", "numbers", "training", "split", "exclusions", "preferences", "experience", "review"];
+
+// Turns a comma-separated free-text field into a clean string array for the
+// profiles.dietary_restrictions/allergies/injury_flags columns — all three
+// already existed in the schema, just never collected or read anywhere.
+function parseList(str) {
+  return (str || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
 
 const MUSCLE_LABELS = {
   chest: "Chest",
@@ -67,15 +77,37 @@ function deriveInitialForm(profile, latestMetric) {
     pace: profile?.pace || "",
     activityLevel: "light",
     goalWeight: toDisplay(profile?.goal_weight ?? null),
-    goalBodyFatPct: profile?.goal_body_fat_pct != null ? String(profile.goal_body_fat_pct) : "",
-    // Whether the person has typed their own goal body-fat % — until they
-    // do, it's kept in sync with an estimate computed from goal weight (see
-    // setGoalWeight/projectGoalBodyFatPct). An existing saved value counts
-    // as theirs, so rebuilding a plan doesn't silently overwrite it.
-    goalBodyFatPctTouched: profile?.goal_body_fat_pct != null,
+    // Always derived fresh from current stats + the saved goal weight,
+    // rather than trusting whatever goal_body_fat_pct was saved last time —
+    // that number goes stale the moment current weight/body-fat changes
+    // (which is most of the time, since rebuilding a plan usually happens
+    // after real progress). Falls back to a raw saved value only when there's
+    // no goal weight to estimate from yet.
+    goalBodyFatPct: (() => {
+      const estimated = profile?.goal_weight != null
+        ? projectGoalBodyFatPct(weightLb, bodyFat, profile.goal_weight, profile?.goal || "fat")
+        : null;
+      if (estimated != null) return String(Math.round(estimated * 10) / 10);
+      return profile?.goal_body_fat_pct != null ? String(profile.goal_body_fat_pct) : "";
+    })(),
+    // Whether the person has typed their own goal body-fat % THIS session —
+    // until they do, it stays in sync with the estimate above as goal weight
+    // or goal direction change (see setGoalWeight/setGoal). A value that was
+    // merely saved from a past session doesn't count as "theirs" here: it
+    // goes stale, so every load starts in auto-estimate mode and only a
+    // fresh keystroke in this field opts back out of it.
+    goalBodyFatPctTouched: false,
     restWeekdays: restWeekdays.length ? restWeekdays : [2, 6],
     splitId: "",
     excludedIds: [],
+    // Free-text, comma-separated in the UI — stored as arrays (see parseList)
+    // in profiles.dietary_restrictions/allergies/injury_flags so the
+    // Nutritionist and Trainer personas always know about them, not just
+    // when Harry happens to mention it in chat or remembers to add a
+    // Settings note.
+    dietaryRestrictions: (profile?.dietary_restrictions || []).join(", "),
+    allergies: (profile?.allergies || []).join(", "),
+    injuryNotes: (profile?.injury_flags || []).join(", "),
     experience: "intermediate",
   };
 }
@@ -334,6 +366,9 @@ export default function OnboardingPage() {
           goal_weight: goalWeightLb,
           goal_body_fat_pct: goalBodyFatPct,
           training_split: trainingSplit,
+          dietary_restrictions: parseList(form.dietaryRestrictions),
+          allergies: parseList(form.allergies),
+          injury_flags: parseList(form.injuryNotes),
         })
         .eq("id", profile.id);
       if (profileErr) throw profileErr;
@@ -579,6 +614,47 @@ export default function OnboardingPage() {
           </>
         )}
 
+        {stepName === "preferences" && (
+          <>
+            <p className="eyebrow" style={{ marginBottom: 10 }}>Anything Your Coaches Should Know</p>
+            <p className="field-hint" style={{ marginTop: -4, marginBottom: 12 }}>
+              All optional — but the more your coaches know up front, the less you&apos;ll have to repeat yourself in
+              chat. These show up automatically in the Nutritionist&apos;s and Trainer&apos;s context, not just this once.
+            </p>
+            <div className="field" style={{ marginBottom: 12 }}>
+              <label className="field-label">Dietary restrictions</label>
+              <input
+                type="text"
+                placeholder="e.g. vegetarian, halal, dairy-free"
+                value={form.dietaryRestrictions}
+                onChange={(e) => set("dietaryRestrictions", e.target.value)}
+              />
+              <p className="field-hint">Comma-separated — the Nutritionist will never suggest around these.</p>
+            </div>
+            <div className="field" style={{ marginBottom: 12 }}>
+              <label className="field-label">Allergies</label>
+              <input
+                type="text"
+                placeholder="e.g. peanuts, shellfish"
+                value={form.allergies}
+                onChange={(e) => set("allergies", e.target.value)}
+              />
+            </div>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label className="field-label">Injuries or things to watch out for</label>
+              <input
+                type="text"
+                placeholder="e.g. bad lower back, shoulder impingement"
+                value={form.injuryNotes}
+                onChange={(e) => set("injuryNotes", e.target.value)}
+              />
+              <p className="field-hint">
+                On top of the exercises you already excluded — this gives the Trainer context for how to talk about them, e.g. easing off a movement that aggravates it rather than just skipping it silently.
+              </p>
+            </div>
+          </>
+        )}
+
         {stepName === "experience" && (
           <>
             <p className="eyebrow" style={{ marginBottom: 10 }}>Experience Level</p>
@@ -634,6 +710,19 @@ export default function OnboardingPage() {
                   <>. No fixed goal weight — we&apos;ll track your trend rather than count down to a date.</>
                 )}
               </p>
+
+              {(form.dietaryRestrictions.trim() || form.allergies.trim() || form.injuryNotes.trim()) && (
+                <>
+                  <p className="field-label">Your Coaches Will Know</p>
+                  <p className="note" style={{ marginTop: 6, marginBottom: 16 }}>
+                    {[
+                      form.dietaryRestrictions.trim() && `Diet: ${form.dietaryRestrictions.trim()}`,
+                      form.allergies.trim() && `Allergies: ${form.allergies.trim()}`,
+                      form.injuryNotes.trim() && `Injuries: ${form.injuryNotes.trim()}`,
+                    ].filter(Boolean).join(" · ")}
+                  </p>
+                </>
+              )}
 
               <p className="field-label">Your Plan</p>
               {previewDays.map((d) => (
