@@ -1,27 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { supabase } from "../../lib/supabaseClient";
-import { PACE_RATE } from "../../lib/coaching";
+import { PACE_RATE, PACE_LABEL, GOAL_LABEL } from "../../lib/coaching";
 import { useProfile } from "../../lib/useProfile";
 import { applyTheme } from "../../lib/theme";
 import AppHeader from "../../components/AppHeader";
 import BottomNav from "../../components/BottomNav";
 
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
-const PACE_LABEL = {
-  loss_05: "Lose 0.5 lb/week",
-  loss_1: "Lose 1 lb/week",
-  loss_15: "Lose 1.5 lb/week",
-  loss_2: "Lose 2 lb/week",
-  gain_025: "Gain 0.25 lb/week",
-  gain_05: "Gain 0.5 lb/week",
-  gain_075: "Gain 0.75 lb/week",
-  gain_1: "Gain 1 lb/week",
-};
-
-const GOAL_LABEL = { fat: "Lose fat", muscle: "Build muscle", recomp: "Body recomposition" };
 
 // Every field this page can write, with its blank-state default — anything
 // not in this list is left alone (never round-tripped through the form).
@@ -318,6 +306,18 @@ export default function SettingsPage() {
             </select>
           </div>
         ))}
+      </div>
+
+      <div className="card">
+        <p className="eyebrow" style={{ marginBottom: 4 }}>Training Plan</p>
+        <p className="meal-desc" style={{ marginBottom: 10 }}>
+          Rebuild your whole split from scratch — pick your training days, a split style, your experience level, and
+          any exercises to skip, and it regenerates your exercises/sets/reps and this week's nutrition targets to match.
+        </p>
+        <Link href="/onboarding" className="btn secondary" style={{ width: "auto", padding: "10px 18px", display: "inline-block" }}>
+          Rebuild my plan
+        </Link>
+        <p className="field-hint">This replaces your current exercise list and this week's targets — it won't touch logged history.</p>
       </div>
 
       <div className="card">
