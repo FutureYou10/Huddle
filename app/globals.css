@@ -491,14 +491,11 @@ details.more summary::-webkit-details-marker { display: none; }
   box-shadow: var(--shadow-sm);
 }
 .chat-coach-icon {
-  width: 42px;
-  height: 42px;
-  border-radius: 50%;
+  width: 50px;
+  height: 50px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: color-mix(in srgb, var(--card-color, var(--accent)) 16%, transparent);
-  color: var(--card-color, var(--accent));
 }
 .chat-coach-name { font-size: 12.5px; font-weight: 700; color: var(--text); }
 .chat-coach-tagline { font-size: 9.5px; color: var(--text-faint); line-height: 1.25; }
@@ -600,8 +597,12 @@ details.more summary::-webkit-details-marker { display: none; }
 .coach-msg-assistant { align-self: flex-start; background: var(--bg-raised); color: var(--text); border-bottom-left-radius: 6px; }
 .coach-msg-typing { color: var(--text-faint); }
 /* A reply plus its "Listen" control — grouped so the control reads as
-   belonging to that one reply, not floating loose in the thread. */
-.coach-msg-row { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; max-width: 85%; align-self: flex-start; }
+   belonging to that one reply, not floating loose in the thread. Nested
+   inside .coach-msg-with-avatar, which adds the coach's cartoon face —
+   messaging-app style — alongside it. */
+.coach-msg-with-avatar { display: flex; align-items: flex-end; gap: 8px; align-self: flex-start; max-width: 92%; }
+.coach-msg-avatar { flex-shrink: 0; width: 30px; height: 30px; border-radius: 50%; overflow: hidden; box-shadow: var(--shadow-sm); }
+.coach-msg-row { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
 .coach-msg-row .coach-msg { max-width: 100%; }
 .coach-speak {
   display: flex;

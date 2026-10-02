@@ -6,40 +6,12 @@ import { useProfile } from "../../lib/useProfile";
 import AppHeader from "../../components/AppHeader";
 import BottomNav from "../../components/BottomNav";
 import { COACHES, markSeen, countUnread } from "../../lib/unreadCoach";
-
-function TransformationIcon() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 17l5-5.5 4 3L21 5" />
-      <path d="M15 5h6v6" />
-    </svg>
-  );
-}
-function NutritionistIcon() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 21c-3.5-2-6-6.5-6-10.5C6 6 8.5 3 12 3s6 3 6 7.5c0 4-2.5 8.5-6 10.5Z" />
-      <path d="M12 3c-.3-1.1.3-2.2 1.6-2.3" />
-    </svg>
-  );
-}
-function TrainerIcon() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M2.5 12h2.5M19 12h2.5" />
-      <rect x="5" y="9" width="2.5" height="6" rx="0.8" />
-      <rect x="16.5" y="9" width="2.5" height="6" rx="0.8" />
-      <path d="M7.5 12h9" />
-      <rect x="3.5" y="10.3" width="1.5" height="3.4" rx="0.5" />
-      <rect x="19" y="10.3" width="1.5" height="3.4" rx="0.5" />
-    </svg>
-  );
-}
+import { TransformationFace, NutritionistFace, TrainerFace } from "../../components/CoachFaces";
 
 const COACH_META = {
-  transformation: { label: "Transformation", tagline: "Your trend & the big picture", color: "var(--fat)", Icon: TransformationIcon },
-  nutritionist: { label: "Nutritionist", tagline: "Log food, hit your targets", color: "var(--nutrition)", Icon: NutritionistIcon },
-  trainer: { label: "Trainer", tagline: "Today's session", color: "var(--training)", Icon: TrainerIcon },
+  transformation: { label: "Transformation", tagline: "Your trend & the big picture", color: "var(--fat)", Face: TransformationFace },
+  nutritionist: { label: "Nutritionist", tagline: "Log food, hit your targets", color: "var(--nutrition)", Face: NutritionistFace },
+  trainer: { label: "Trainer", tagline: "Today's session", color: "var(--training)", Face: TrainerFace },
 };
 
 const GREETING = {
@@ -175,6 +147,7 @@ export default function CoachChatPage() {
   if (profileLoading) return <div className="center-loading">Loading…</div>;
 
   const list = threads[tab] || [];
+  const ActiveFace = COACH_META[tab].Face;
 
   return (
     <div className="shell chat-shell">
@@ -184,7 +157,7 @@ export default function CoachChatPage() {
       <div className="chat-selector">
         {COACHES.map((key) => {
           const meta = COACH_META[key];
-          const Icon = meta.Icon;
+          const Face = meta.Face;
           const active = tab === key;
           const unread = unreadCounts[key] || 0;
           return (
@@ -197,7 +170,7 @@ export default function CoachChatPage() {
             >
               {unread > 0 && <span className="chat-unread-badge">{unread > 9 ? "9+" : unread}</span>}
               <span className="chat-coach-icon">
-                <Icon />
+                <Face size={48} />
               </span>
               <span className="chat-coach-name">{meta.label}</span>
               <span className="chat-coach-tagline">{meta.tagline}</span>
@@ -208,36 +181,55 @@ export default function CoachChatPage() {
 
       <div className="chat-thread" ref={scrollRef}>
         {loadingTab[tab] && list.length === 0 && <div className="coach-greeting">Loading…</div>}
-        {!loadingTab[tab] && list.length === 0 && <div className="coach-greeting">{GREETING[tab]}</div>}
+        {!loadingTab[tab] && list.length === 0 && (
+          <div className="coach-msg-with-avatar">
+            <span className="coach-msg-avatar">
+              <ActiveFace size={30} />
+            </span>
+            <div className="coach-greeting" style={{ padding: "6px 4px" }}>{GREETING[tab]}</div>
+          </div>
+        )}
         {list.map((m) =>
           m.role === "assistant" ? (
-            <div key={m.id} className="coach-msg-row">
-              <div className="coach-msg coach-msg-assistant">{m.body}</div>
-              <button
-                type="button"
-                className={`coach-speak${speakingId === m.id ? " active" : ""}`}
-                onClick={() => toggleSpeak(m.id, m.body)}
-                aria-label={speakingId === m.id ? "Stop reading aloud" : "Read reply aloud"}
-              >
-                {speakingId === m.id ? (
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-                    <rect x="6" y="6" width="12" height="12" rx="2" />
-                  </svg>
-                ) : (
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
-                  </svg>
-                )}
-                {speakingId === m.id ? "Stop" : "Listen"}
-              </button>
+            <div key={m.id} className="coach-msg-with-avatar">
+              <span className="coach-msg-avatar">
+                <ActiveFace size={30} />
+              </span>
+              <div className="coach-msg-row">
+                <div className="coach-msg coach-msg-assistant">{m.body}</div>
+                <button
+                  type="button"
+                  className={`coach-speak${speakingId === m.id ? " active" : ""}`}
+                  onClick={() => toggleSpeak(m.id, m.body)}
+                  aria-label={speakingId === m.id ? "Stop reading aloud" : "Read reply aloud"}
+                >
+                  {speakingId === m.id ? (
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                      <rect x="6" y="6" width="12" height="12" rx="2" />
+                    </svg>
+                  ) : (
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                      <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                      <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                    </svg>
+                  )}
+                  {speakingId === m.id ? "Stop" : "Listen"}
+                </button>
+              </div>
             </div>
           ) : (
             <div key={m.id} className={`coach-msg coach-msg-${m.role}`}>{m.body}</div>
           )
         )}
-        {sending && <div className="coach-msg coach-msg-assistant coach-msg-typing">…</div>}
+        {sending && (
+          <div className="coach-msg-with-avatar">
+            <span className="coach-msg-avatar">
+              <ActiveFace size={30} />
+            </span>
+            <div className="coach-msg coach-msg-assistant coach-msg-typing">…</div>
+          </div>
+        )}
       </div>
 
       <div className="coach-input-row">
