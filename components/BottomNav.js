@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import CoachPanel from "./CoachPanel";
+import { supabase } from "../lib/supabaseClient";
+import { countUnread, totalUnread } from "../lib/unreadCoach";
 
 function OverviewIcon({ active }) {
   return (
@@ -54,32 +55,55 @@ const TABS = [
   { href: "/training", label: "Training", Icon: TrainingIcon },
 ];
 
+// Coach is now its own full-screen page (app/coach) rather than a panel this
+// component opened — so it's a plain Link like the other three tabs. The
+// one thing it still owns is the aggregate unread badge: a quick count of
+// unseen coach replies across all three threads, so "something's waiting"
+// is visible from anywhere in the app, not just from inside the chat.
 export default function BottomNav() {
   const pathname = usePathname();
-  const [coachOpen, setCoachOpen] = useState(false);
+  const [unread, setUnread] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const userId = sessionData.session?.user?.id;
+      if (!userId) return;
+      const { data } = await supabase
+        .from("coach_messages")
+        .select("coach, created_at")
+        .eq("user_id", userId)
+        .eq("role", "assistant")
+        .order("created_at", { ascending: false })
+        .limit(150);
+      if (!cancelled) setUnread(totalUnread(countUnread(userId, data || [])));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const coachActive = pathname.startsWith("/coach");
 
   return (
-    <>
-      <nav className="bottom-nav">
-        {TABS.map(({ href, label, Icon }) => {
-          const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
-          return (
-            <Link key={href} href={href} className={`nav-tab${active ? " active" : ""}`}>
-              <Icon active={active} />
-              <span>{label}</span>
-            </Link>
-          );
-        })}
-        <button
-          type="button"
-          className={`nav-tab nav-tab-button${coachOpen ? " active" : ""}`}
-          onClick={() => setCoachOpen(true)}
-        >
-          <CoachIcon active={coachOpen} />
-          <span>Coach</span>
-        </button>
-      </nav>
-      <CoachPanel open={coachOpen} onClose={() => setCoachOpen(false)} />
-    </>
+    <nav className="bottom-nav">
+      {TABS.map(({ href, label, Icon }) => {
+        const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
+        return (
+          <Link key={href} href={href} className={`nav-tab${active ? " active" : ""}`}>
+            <Icon active={active} />
+            <span>{label}</span>
+          </Link>
+        );
+      })}
+      <Link href="/coach" className={`nav-tab${coachActive ? " active" : ""}`}>
+        <span className="nav-icon-wrap">
+          <CoachIcon active={coachActive} />
+          {unread > 0 && <span className="nav-badge">{unread > 9 ? "9+" : unread}</span>}
+        </span>
+        <span>Coach</span>
+      </Link>
+    </nav>
   );
 }

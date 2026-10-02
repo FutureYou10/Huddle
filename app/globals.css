@@ -449,84 +449,109 @@ details.more summary::-webkit-details-marker { display: none; }
 .badge.done { background: color-mix(in srgb, var(--good) 15%, transparent); color: var(--good); }
 .badge.pending { background: var(--bg-raised); color: var(--text-faint); }
 
-/* Coach chat panel */
-.nav-tab-button { background: none; border: none; font-family: var(--font-body); cursor: pointer; }
-.coach-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  z-index: 30;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
+/* Coach chat — a full-screen page (app/coach) rather than a slide-up panel.
+   .shell already gives the page flex-column + side padding; this overrides
+   just enough to pin it to the viewport height so only the thread scrolls,
+   the way a native messaging app's conversation screen behaves. */
+.chat-shell {
+  height: 100dvh;
+  overflow: hidden;
+  padding-bottom: calc(92px + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
 }
-.coach-panel {
-  width: 100%;
-  max-width: 480px;
-  height: min(86vh, 760px);
-  background: var(--bg-card);
-  border-radius: 30px 30px 0 0;
-  box-shadow: var(--shadow-md);
+
+/* The coach selector: three real cards, not cramped pill tabs — bigger
+   targets, a color and icon per coach, and room for an unread badge, closer
+   to a messaging app's conversation list than a segmented control. */
+.chat-selector {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  flex-shrink: 0;
+}
+.chat-coach-card {
+  position: relative;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-}
-.coach-handle {
-  width: 38px;
-  height: 5px;
-  border-radius: 999px;
-  background: var(--line);
-  margin: 10px auto 0;
-  flex-shrink: 0;
-}
-.coach-panel-head {
-  display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 12px 10px 14px 18px;
-  flex-shrink: 0;
-}
-/* A single segmented control rather than three separate pill buttons —
-   one rounded shape instead of three, closer to how a bottom sheet's
-   mode switch usually looks, and nothing to horizontally scroll. */
-.coach-tabs {
-  flex: 1;
-  display: flex;
-  gap: 2px;
-  background: var(--bg-raised);
-  border-radius: 999px;
-  padding: 4px;
-}
-.coach-tab {
-  flex: 1;
-  border: none;
-  background: transparent;
-  color: var(--text-dim);
+  gap: 5px;
+  text-align: center;
+  padding: 14px 6px 12px;
+  border-radius: 18px;
+  border: 1.5px solid var(--line);
+  background: var(--bg-card);
   font-family: var(--font-body);
-  font-size: 13px;
-  font-weight: 600;
-  padding: 10px 8px;
-  border-radius: 999px;
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
 }
-.coach-tab.active { background: var(--accent); color: #fff; }
-.coach-close {
-  flex-shrink: 0;
-  width: 36px;
-  height: 36px;
+.chat-coach-card.active {
+  border-color: var(--card-color, var(--accent));
+  background: color-mix(in srgb, var(--card-color, var(--accent)) 10%, var(--bg-card));
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
+.chat-coach-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: none;
-  border-radius: 50%;
-  background: var(--bg-raised);
-  color: var(--text-dim);
-  font-size: 16px;
-  line-height: 1;
-  cursor: pointer;
+  background: color-mix(in srgb, var(--card-color, var(--accent)) 16%, transparent);
+  color: var(--card-color, var(--accent));
+}
+.chat-coach-name { font-size: 12.5px; font-weight: 700; color: var(--text); }
+.chat-coach-tagline { font-size: 9.5px; color: var(--text-faint); line-height: 1.25; }
+.chat-unread-badge {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--bad);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 0 0 2px var(--bg-card);
+}
+
+.chat-thread {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 2px 2px 4px;
+  margin: 0 -2px;
+}
+
+/* The small unread count on the bottom nav's Coach tab — same treatment as
+   the per-coach badges above, scaled down for the nav icon. */
+.nav-icon-wrap { position: relative; display: inline-flex; }
+.nav-badge {
+  position: absolute;
+  top: -5px;
+  right: -9px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--bad);
+  color: #fff;
+  font-size: 9.5px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 0 0 2px var(--bg-card);
 }
 
 /* Recap — a Spotify-Wrapped-style swipeable stat deck. */
@@ -561,14 +586,6 @@ details.more summary::-webkit-details-marker { display: none; }
 .recap-dots { display: flex; justify-content: center; gap: 6px; padding-bottom: 20px; flex-shrink: 0; }
 .recap-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--line); }
 .recap-dot.active { background: var(--accent); width: 16px; border-radius: 3px; }
-.coach-messages {
-  flex: 1;
-  overflow-y: auto;
-  padding: 10px 16px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
 .coach-greeting { color: var(--text-faint); font-size: 14.5px; line-height: 1.6; padding: 10px 4px; }
 .coach-msg {
   max-width: 85%;
