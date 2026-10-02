@@ -47,6 +47,16 @@ const EXPERIENCE_OPTIONS = [
   { id: "advanced", label: "Advanced", blurb: "Years of consistent training — ready for a bigger workload." },
 ];
 
+// Lets weekly recalibration (and anything else that reasons about missing
+// active-energy data) tell "no watch, so of course there's nothing to sync"
+// apart from "has a watch, but it's not syncing right" instead of guessing
+// from a blank column either way.
+const TRACKING_OPTIONS = [
+  { id: "apple_watch", label: "Apple Watch or similar", blurb: "Syncs steps, active/resting energy and workouts automatically." },
+  { id: "bluetooth_scale", label: "Bluetooth scale", blurb: "Syncs weight and body fat % automatically — no activity tracking." },
+  { id: "manual", label: "Logging manually", blurb: "You'll enter weigh-ins (and anything else) yourself." },
+];
+
 function deriveInitialForm(profile, latestMetric) {
   const units = profile?.units || "imperial";
   const toDisplay = (lb) => {
@@ -108,6 +118,10 @@ function deriveInitialForm(profile, latestMetric) {
     dietaryRestrictions: (profile?.dietary_restrictions || []).join(", "),
     allergies: (profile?.allergies || []).join(", "),
     injuryNotes: (profile?.injury_flags || []).join(", "),
+    // Lets weekly recalibration (and anything that explains missing
+    // active-energy data) tell "no watch" apart from "watch not syncing
+    // right" instead of just guessing from an empty column.
+    trackingMethod: profile?.tracking_method || "",
     experience: "intermediate",
   };
 }
@@ -369,6 +383,7 @@ export default function OnboardingPage() {
           dietary_restrictions: parseList(form.dietaryRestrictions),
           allergies: parseList(form.allergies),
           injury_flags: parseList(form.injuryNotes),
+          tracking_method: form.trackingMethod || null,
         })
         .eq("id", profile.id);
       if (profileErr) throw profileErr;
@@ -651,6 +666,25 @@ export default function OnboardingPage() {
               <p className="field-hint">
                 On top of the exercises you already excluded — this gives the Trainer context for how to talk about them, e.g. easing off a movement that aggravates it rather than just skipping it silently.
               </p>
+            </div>
+
+            <label className="field-label" style={{ marginTop: 18, display: "block" }}>How do you track activity?</label>
+            <p className="field-hint" style={{ marginTop: -4, marginBottom: 10 }}>
+              So a missing reading reads as "no watch" rather than a sync problem — e.g. Weekly Recalibration falls
+              back to your steps (then a flat estimate) when there's no real active-energy data to work with.
+            </p>
+            <div className="option-list">
+              {TRACKING_OPTIONS.map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  className={`option-card wide${form.trackingMethod === opt.id ? " active" : ""}`}
+                  onClick={() => set("trackingMethod", form.trackingMethod === opt.id ? "" : opt.id)}
+                >
+                  <span className="option-card-label">{opt.label}</span>
+                  <span className="option-card-sub">{opt.blurb}</span>
+                </button>
+              ))}
             </div>
           </>
         )}

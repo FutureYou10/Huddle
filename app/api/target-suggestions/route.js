@@ -113,7 +113,21 @@ export async function POST(request) {
       return NextResponse.json({ error: "Expected { id, action: 'apply' | 'dismiss' }." }, { status: 400 });
     }
 
-    const { data: suggestion, error: findErr } = await supabase.from("target_suggestions").select("*").eq("id", id).maybeSingle();
+    // Scoped to userId explicitly, not just trusted to RLS — this id comes
+    // straight from the client, and a stale one (e.g. kept around across a
+    // sign-out/sign-in to a different account in the same tab) should never
+    // read or apply as "pending" for anyone but its actual owner. RLS
+    // (auth.uid() = user_id on target_suggestions) already blocks this at
+    // the DB layer today, so this is defense in depth, not a fix for an
+    // observed leak — found while investigating a reported "targets changed
+    // unexpectedly" case that turned out to be something else entirely (see
+    // commit message).
+    const { data: suggestion, error: findErr } = await supabase
+      .from("target_suggestions")
+      .select("*")
+      .eq("id", id)
+      .eq("user_id", userId)
+      .maybeSingle();
     if (findErr) throw findErr;
     if (!suggestion || suggestion.status !== "pending") {
       return NextResponse.json({ error: "That suggestion isn't pending anymore." }, { status: 409 });
@@ -145,6 +159,7 @@ export async function POST(request) {
       .from("target_suggestions")
       .update({ status: action === "apply" ? "applied" : "dismissed", decided_at: new Date().toISOString() })
       .eq("id", id)
+      .eq("user_id", userId)
       .select()
       .single();
     if (updateErr) throw updateErr;

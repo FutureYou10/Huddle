@@ -124,6 +124,10 @@ export default function OverviewPage() {
 
   const calTarget = target?.daily_calorie_target ?? null;
   const proteinTarget = target?.daily_protein_target_g ?? null;
+  // Was hardcoded to 10,000 everywhere below — now a real per-user setting
+  // (profiles.steps_target, editable from Settings), same pattern as every
+  // other target on this page.
+  const stepsTarget = Number(profile?.steps_target ?? 10000);
   const bandPct = Number(profile?.nutrition_band_pct ?? 20);
   const bandLow = Math.round(100 - bandPct);
   const bandHigh = Math.round(100 + bandPct);
@@ -318,7 +322,7 @@ export default function OverviewPage() {
           <div className="stat">
             <div className="k">Steps</div>
             <div className="v">{yesterdayMetric?.steps ?? "—"}</div>
-            <div className="meal-desc">vs 10,000 target</div>
+            <div className="meal-desc">vs {stepsTarget.toLocaleString()} target</div>
           </div>
         </div>
       </div>
@@ -413,8 +417,8 @@ export default function OverviewPage() {
       </div>
 
       <div className="card">
-        <h3 style={{ fontFamily: "var(--font-display)", fontSize: 13, textTransform: "uppercase", color: "var(--text-dim)", marginBottom: 12 }}>Steps — Last 7 Days <span className="meal-desc">vs 10,000/day target</span></h3>
-        <BarChartVsTarget days={stepsSeries} target={10000} color="var(--muscle)" targetLabel="10,000" />
+        <h3 style={{ fontFamily: "var(--font-display)", fontSize: 13, textTransform: "uppercase", color: "var(--text-dim)", marginBottom: 12 }}>Steps — Last 7 Days <span className="meal-desc">vs {stepsTarget.toLocaleString()}/day target</span></h3>
+        <BarChartVsTarget days={stepsSeries} target={stepsTarget} color="var(--muscle)" targetLabel={stepsTarget.toLocaleString()} />
       </div>
 
       <div className="card countdown-card" style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>

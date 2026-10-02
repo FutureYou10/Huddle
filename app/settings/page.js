@@ -32,7 +32,10 @@ const FIELD_DEFAULTS = {
   recalibration_activity_fallback_kcal: 450,
   recalibration_min_activity_days: 3,
   recalibration_min_logged_days: 3,
+  recalibration_kcal_per_1000_steps: 40,
   nutrition_insights_min_logged_days: 2,
+  steps_target: 10000,
+  tracking_method: "",
   coach_notes: "",
   transformation_notes: "",
   nutritionist_notes: "",
@@ -138,6 +141,16 @@ export default function SettingsPage() {
       setError("The activity fallback needs to be a positive number of kcal.");
       return;
     }
+    const kcalPer1000Steps = Number(form.recalibration_kcal_per_1000_steps);
+    if (!Number.isFinite(kcalPer1000Steps) || kcalPer1000Steps < 0) {
+      setError("The kcal-per-1,000-steps estimate needs to be a positive number.");
+      return;
+    }
+    const stepsTarget = Number(form.steps_target);
+    if (!Number.isFinite(stepsTarget) || stepsTarget <= 0) {
+      setError("The daily steps target needs to be a positive number.");
+      return;
+    }
 
     setSaving(true);
     const numOrNull = (v) => (v === "" || v == null ? null : Number(v));
@@ -160,7 +173,10 @@ export default function SettingsPage() {
       recalibration_activity_fallback_kcal: fallbackKcal,
       recalibration_min_activity_days: Math.round(Number(form.recalibration_min_activity_days)),
       recalibration_min_logged_days: Math.round(Number(form.recalibration_min_logged_days)),
+      recalibration_kcal_per_1000_steps: kcalPer1000Steps,
       nutrition_insights_min_logged_days: Math.round(Number(form.nutrition_insights_min_logged_days)),
+      steps_target: Math.round(stepsTarget),
+      tracking_method: form.tracking_method || null,
       coach_notes: form.coach_notes || null,
       transformation_notes: form.transformation_notes || null,
       nutritionist_notes: form.nutritionist_notes || null,
@@ -217,6 +233,16 @@ export default function SettingsPage() {
             ))}
           </div>
           <p className="field-hint">Applies to the weight numbers on Overview. Lifting weights and body-fat % are unaffected.</p>
+        </div>
+        <div className="field" style={{ marginBottom: 0 }}>
+          <label className="field-label">How do you track activity?</label>
+          <select value={form.tracking_method} onChange={(e) => set("tracking_method", e.target.value)}>
+            <option value="">Not sure / prefer not to say</option>
+            <option value="apple_watch">Apple Watch or similar</option>
+            <option value="bluetooth_scale">Bluetooth scale (weight/body fat only)</option>
+            <option value="manual">Logging manually</option>
+          </select>
+          <p className="field-hint">Helps the coaches know what data to actually expect — e.g. whether missing active-energy readings mean no watch, not a sync problem.</p>
         </div>
       </div>
 
@@ -343,9 +369,20 @@ export default function SettingsPage() {
             <input type="number" min="0" value={form.recalibration_min_logged_days} onChange={(e) => set("recalibration_min_logged_days", e.target.value)} />
           </div>
         </div>
-        <div className="field" style={{ marginBottom: 0 }}>
+        <div className="field">
           <label className="field-label">Min. logged days for nutrition gap suggestions</label>
           <input type="number" min="0" value={form.nutrition_insights_min_logged_days} onChange={(e) => set("nutrition_insights_min_logged_days", e.target.value)} />
+        </div>
+        <div className="field-row" style={{ marginBottom: 0 }}>
+          <div className="field">
+            <label className="field-label">Daily steps target</label>
+            <input type="number" min="1" step="500" value={form.steps_target} onChange={(e) => set("steps_target", e.target.value)} />
+          </div>
+          <div className="field">
+            <label className="field-label">Recalibration: kcal per 1,000 steps</label>
+            <input type="number" min="0" value={form.recalibration_kcal_per_1000_steps} onChange={(e) => set("recalibration_kcal_per_1000_steps", e.target.value)} />
+            <p className="field-hint">Used for the activity add-on on weeks with real step data but no usable watch active-energy data.</p>
+          </div>
         </div>
       </div>
 
