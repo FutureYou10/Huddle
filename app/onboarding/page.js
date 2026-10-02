@@ -5,7 +5,10 @@ import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabaseClient";
 import { useProfile } from "../../lib/useProfile";
 import { isOnboarded } from "../../lib/onboardingStatus";
-import { todayIso, mondayOf, toStorageLb, deriveLeanMass, PACE_LABEL, GOAL_LABEL, pacesForGoal, DAY_LABELS } from "../../lib/coaching";
+import {
+  todayIso, mondayOf, toStorageLb, deriveLeanMass, PACE_LABEL, GOAL_LABEL, pacesForGoal, DAY_LABELS,
+  fmtDateLong, fmtWeight, projectEndDateFromPace,
+} from "../../lib/coaching";
 import { splitOptionsFor } from "../../lib/splitTemplates";
 import { previewPlanDays, generatePlan, dayTypeNamesFor } from "../../lib/planGenerator";
 import { EXERCISES } from "../../lib/exerciseLibrary";
@@ -62,7 +65,6 @@ function deriveInitialForm(profile, latestMetric) {
     bodyFat: bodyFat != null ? String(bodyFat) : "",
     goal: profile?.goal || "fat",
     pace: profile?.pace || "",
-    endDate: profile?.end_date || "",
     activityLevel: "light",
     goalWeight: toDisplay(profile?.goal_weight ?? null),
     goalBodyFatPct: profile?.goal_body_fat_pct != null ? String(profile.goal_body_fat_pct) : "",
@@ -199,12 +201,12 @@ export default function OnboardingPage() {
 
   function canProceed() {
     switch (STEPS[step]) {
+      case "about":
+        return form.dob.trim() !== "";
       case "weighin":
         return form.weight.trim() !== "" && form.bodyFat.trim() !== "" && !Number.isNaN(parseFloat(form.weight)) && !Number.isNaN(parseFloat(form.bodyFat));
       case "goal":
-        return !!form.goal && !!form.pace && !!form.endDate;
-      case "numbers":
-        return form.goalWeight.trim() !== "" && form.goalBodyFatPct.trim() !== "";
+        return !!form.goal && !!form.pace;
       case "training":
         return daysPerWeek >= 1 && daysPerWeek <= 6;
       case "split":
@@ -236,8 +238,12 @@ export default function OnboardingPage() {
     try {
       const weightLb = toStorageLb(parseFloat(form.weight), form.units);
       const bodyFatPct = parseFloat(form.bodyFat);
-      const goalWeightLb = toStorageLb(parseFloat(form.goalWeight), form.units);
-      const goalBodyFatPct = parseFloat(form.goalBodyFatPct);
+      // Both optional — someone may not have a number in mind yet. When a
+      // goal weight IS given, the target date is derived from it + the pace
+      // already chosen, never typed in separately (see projectEndDateFromPace).
+      const goalWeightLb = form.goalWeight.trim() !== "" ? toStorageLb(parseFloat(form.goalWeight), form.units) : null;
+      const goalBodyFatPct = form.goalBodyFatPct.trim() !== "" ? parseFloat(form.goalBodyFatPct) : null;
+      const computedEndDate = goalWeightLb != null ? projectEndDateFromPace(weightLb, goalWeightLb, form.pace) : null;
       const leanMassLb = deriveLeanMass(weightLb, bodyFatPct);
       const heightCm = form.heightCm.trim() ? Number(form.heightCm) : null;
 
@@ -271,7 +277,7 @@ export default function OnboardingPage() {
           goal: form.goal,
           pace: form.pace,
           start_date: todayIso(),
-          end_date: form.endDate || null,
+          end_date: computedEndDate,
           start_weight: weightLb,
           start_body_fat_pct: bodyFatPct,
           start_lean_mass: leanMassLb,
@@ -362,9 +368,9 @@ export default function OnboardingPage() {
               </div>
             </div>
             <div className="field" style={{ marginBottom: 0 }}>
-              <label className="field-label">Date of birth (optional)</label>
-              <input type="date" value={form.dob} onChange={(e) => set("dob", e.target.value)} />
-              <p className="field-hint">Only used as a fallback if we ever need to estimate your BMR without real body-composition data.</p>
+              <label className="field-label">Date of birth</label>
+              <input type="date" required value={form.dob} onChange={(e) => set("dob", e.target.value)} />
+              <p className="field-hint">Needed to calculate your calorie targets — it&apos;s also the fallback for estimating BMR on days real body-composition data isn&apos;t available.</p>
             </div>
           </>
         )}
@@ -408,7 +414,7 @@ export default function OnboardingPage() {
                 ))}
               </select>
             </div>
-            <div className="field">
+            <div className="field" style={{ marginBottom: 0 }}>
               <label className="field-label">How active is your day-to-day, outside training?</label>
               <select value={form.activityLevel} onChange={(e) => set("activityLevel", e.target.value)}>
                 {Object.entries(ACTIVITY_LEVELS).map(([k, v]) => (
@@ -417,28 +423,46 @@ export default function OnboardingPage() {
               </select>
               <p className="field-hint">Used for your first nutrition targets — Weekly Recalibration swaps this estimate for your real tracked activity after the first week.</p>
             </div>
-            <div className="field" style={{ marginBottom: 0 }}>
-              <label className="field-label">Target date</label>
-              <input type="date" value={form.endDate} onChange={(e) => set("endDate", e.target.value)} />
-            </div>
           </>
         )}
 
-        {stepName === "numbers" && (
-          <>
-            <p className="eyebrow" style={{ marginBottom: 10 }}>Your Target Numbers</p>
-            <div className="field-row">
-              <div className="field">
-                <label className="field-label">Goal weight ({form.units === "metric" ? "kg" : "lb"})</label>
-                <input type="number" step="0.1" value={form.goalWeight} onChange={(e) => set("goalWeight", e.target.value)} />
+        {stepName === "numbers" && (() => {
+          const weightLbNow = toStorageLb(parseFloat(form.weight), form.units);
+          const goalWeightLbNow = form.goalWeight.trim() !== "" ? toStorageLb(parseFloat(form.goalWeight), form.units) : null;
+          const projectedEndDate =
+            goalWeightLbNow != null && !Number.isNaN(goalWeightLbNow) && weightLbNow != null
+              ? projectEndDateFromPace(weightLbNow, goalWeightLbNow, form.pace)
+              : null;
+          return (
+            <>
+              <p className="eyebrow" style={{ marginBottom: 10 }}>Your Target Numbers</p>
+              <p className="field-hint" style={{ marginTop: -4, marginBottom: 10 }}>
+                Optional — only fill these in if you&apos;ve got a number in mind. We work out the date from the pace
+                you already picked, rather than asking you to guess one — that&apos;s what keeps the calorie target
+                realistic instead of forcing through an unsafe deficit or surplus to hit an arbitrary date.
+              </p>
+              <div className="field-row">
+                <div className="field">
+                  <label className="field-label">Goal weight ({form.units === "metric" ? "kg" : "lb"})</label>
+                  <input type="number" step="0.1" value={form.goalWeight} onChange={(e) => set("goalWeight", e.target.value)} />
+                </div>
+                <div className="field">
+                  <label className="field-label">Goal body fat %</label>
+                  <input type="number" step="0.1" value={form.goalBodyFatPct} onChange={(e) => set("goalBodyFatPct", e.target.value)} />
+                </div>
               </div>
-              <div className="field">
-                <label className="field-label">Goal body fat %</label>
-                <input type="number" step="0.1" value={form.goalBodyFatPct} onChange={(e) => set("goalBodyFatPct", e.target.value)} />
-              </div>
-            </div>
-          </>
-        )}
+              {goalWeightLbNow != null ? (
+                <p className="note" style={{ marginBottom: 0 }}>
+                  {projectedEndDate
+                    ? <>At {PACE_LABEL[form.pace] || "your chosen pace"}, that&apos;s roughly <strong>{fmtDateLong(projectedEndDate)}</strong>.</>
+                    : "Pick a pace on the previous step to see an estimated date."}
+                </p>
+              ) : (
+                <p className="field-hint" style={{ marginBottom: 0 }}>No goal weight yet — that&apos;s fine, we&apos;ll track your trend without a fixed target date.</p>
+              )}
+            </>
+          );
+        })()}
 
         {stepName === "training" && (
           <>
@@ -522,8 +546,11 @@ export default function OnboardingPage() {
         )}
 
         {stepName === "review" && (() => {
+          const weightLbNow = toStorageLb(parseFloat(form.weight), form.units);
+          const goalWeightLbNow = form.goalWeight.trim() !== "" ? toStorageLb(parseFloat(form.goalWeight), form.units) : null;
+          const projectedEndDate = goalWeightLbNow != null ? projectEndDateFromPace(weightLbNow, goalWeightLbNow, form.pace) : null;
           const nutritionPreview = estimateDayOneTargets({
-            weightLb: toStorageLb(parseFloat(form.weight), form.units),
+            weightLb: weightLbNow,
             bodyFatPct: parseFloat(form.bodyFat),
             heightCm: form.heightCm.trim() ? Number(form.heightCm) : null,
             sex: form.sex || null,
@@ -535,6 +562,20 @@ export default function OnboardingPage() {
           return (
             <>
               <p className="eyebrow" style={{ marginBottom: 10 }}>Review &amp; Generate</p>
+
+              <p className="field-label">Your Goal</p>
+              <p className="note" style={{ marginTop: 6, marginBottom: 16 }}>
+                {GOAL_LABEL[form.goal]}, {(PACE_LABEL[form.pace] || form.pace).toLowerCase()}
+                {goalWeightLbNow != null ? (
+                  <>
+                    {" "}— targeting {fmtWeight(goalWeightLbNow, form.units)}
+                    {form.goalBodyFatPct.trim() !== "" ? ` / ${form.goalBodyFatPct}% body fat` : ""}
+                    {projectedEndDate ? <>, around <strong>{fmtDateLong(projectedEndDate)}</strong></> : ""}.
+                  </>
+                ) : (
+                  <>. No fixed goal weight — we&apos;ll track your trend rather than count down to a date.</>
+                )}
+              </p>
 
               <p className="field-label">Your Plan</p>
               {previewDays.map((d) => (
