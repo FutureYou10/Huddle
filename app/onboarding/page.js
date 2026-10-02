@@ -7,7 +7,7 @@ import { useProfile } from "../../lib/useProfile";
 import { isOnboarded } from "../../lib/onboardingStatus";
 import {
   todayIso, mondayOf, toStorageLb, deriveLeanMass, PACE_LABEL, GOAL_LABEL, pacesForGoal, DAY_LABELS,
-  fmtDateLong, fmtWeight, projectEndDateFromPace, projectGoalBodyFatPct,
+  fmtDateLong, fmtWeight, projectEndDateFromPace, projectGoalBodyFatPct, deriveGoalPhases,
 } from "../../lib/coaching";
 import { splitOptionsFor } from "../../lib/splitTemplates";
 import { previewPlanDays, generatePlan, dayTypeNamesFor } from "../../lib/planGenerator";
@@ -693,6 +693,14 @@ export default function OnboardingPage() {
             pace: form.pace,
             activityLevel: form.activityLevel,
           });
+          // Preview only — Day 1, so everything after Phase 1 is necessarily
+          // locked. Built from the in-progress form rather than the (not yet
+          // saved) profile, using the same shared deriveGoalPhases the
+          // dashboard uses once this is saved, so the preview never disagrees
+          // with what shows up there afterward.
+          const goalPhases = goalWeightLbNow != null
+            ? deriveGoalPhases({ start_weight: weightLbNow, goal_weight: goalWeightLbNow, pace: form.pace, start_date: todayIso() }, weightLbNow)
+            : [];
           return (
             <>
               <p className="eyebrow" style={{ marginBottom: 10 }}>Review &amp; Generate</p>
@@ -710,6 +718,32 @@ export default function OnboardingPage() {
                   <>. No fixed goal weight — we&apos;ll track your trend rather than count down to a date.</>
                 )}
               </p>
+
+              {goalPhases.length > 0 && (
+                <>
+                  <p className="field-label">Your Phases</p>
+                  <p className="field-hint" style={{ marginTop: 6, marginBottom: 10 }}>
+                    That&apos;s a big enough goal that we&apos;ve split it into {goalPhases.length} ~3-month chunks — the
+                    next one unlocks once you actually hit this one&apos;s target, not just when the date arrives.
+                  </p>
+                  <div className="phase-list" style={{ marginBottom: 16 }}>
+                    {goalPhases.map((p) => (
+                      <div key={p.index} className={`phase-item${p.current ? " current" : ""}${!p.unlocked ? " locked" : ""}`}>
+                        <div>
+                          <div className="phase-label">
+                            {!p.unlocked ? "🔒 " : ""}
+                            {p.label}
+                            {p.current ? " · starts here" : ""}
+                          </div>
+                          <div className="phase-range">
+                            {fmtWeight(p.startWeightLb, form.units)} → {fmtWeight(p.targetWeightLb, form.units)} · est. {fmtDateLong(p.estimatedDate)}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
 
               {(form.dietaryRestrictions.trim() || form.allergies.trim() || form.injuryNotes.trim()) && (
                 <>

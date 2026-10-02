@@ -325,6 +325,24 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .pace-tag.behind { background: color-mix(in srgb, var(--bad) 15%, transparent); color: var(--bad); }
 .pace-tag.nodata { background: var(--bg-raised); color: var(--text-faint); }
 
+/* Goal Phases — sequential weight-target sub-goals (distinct from the
+   Phase Progress chart below, which slices the overall timeline into
+   thirds rather than tracking separate weight targets). */
+.phase-list { display: flex; flex-direction: column; gap: 8px; }
+.phase-item {
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+.phase-item .phase-label { font-size: 13px; font-weight: 600; }
+.phase-item .phase-range { font-size: 11.5px; color: var(--text-faint); margin-top: 2px; }
+.phase-item.complete { border-color: color-mix(in srgb, var(--good) 45%, var(--line)); }
+.phase-item.complete .phase-label { color: var(--good); }
+.phase-item.current { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--bg-card)); }
+.phase-item.current .phase-label { color: var(--accent); }
+.phase-item.locked { opacity: 0.55; }
+
 /* Phase Progress chart legend */
 .phase-legend { display: flex; flex-wrap: wrap; gap: 10px 16px; margin-top: 10px; font-size: 11.5px; color: var(--text-dim); }
 .phase-legend .sw { width: 11px; height: 11px; border-radius: 3px; display: inline-block; margin-right: 5px; vertical-align: middle; }

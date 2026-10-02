@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabaseClient";
 import {
   fmtDate, fmtDateLong, fmtWeight, fmtWeightDelta, todayIso, addDays, weekDates, dayTypeFor,
   deriveLeanMass, deriveFatMass, requiredPace, fatMassTrend, paceTag, phaseProgress, fatLeanProgressSeries, isCalorieDayOnTarget,
+  deriveGoalPhases,
 } from "../lib/coaching";
 import { useProfile } from "../lib/useProfile";
 import AppHeader from "../components/AppHeader";
@@ -215,6 +216,11 @@ export default function OverviewPage() {
     { total: trainingTotalSoFar, done: trainingDoneCount },
   ) : null;
   const progressSeries = progress ? fatLeanProgressSeries(profile, metrics) : [];
+  // Sequential 3-month sub-goals — distinct from phaseProgress's milestones
+  // above (those just slice the overall timeline into thirds for the chart's
+  // x-axis). These are real chunks with their own weight targets; a phase
+  // unlocks once the previous one's target is actually hit, not on a date.
+  const goalPhases = deriveGoalPhases(profile, latest?.weight ?? profile?.start_weight);
 
   const logRows = metrics.slice().reverse().slice(0, 30).map((m) => ({
     ...m,
@@ -360,6 +366,32 @@ export default function OverviewPage() {
         <p className="meal-desc" style={{ margin: "14px 0 4px" }}>Protein vs {proteinTarget ?? "—"}g/day target</p>
         <BarChartVsTarget days={proteinWeek} target={proteinTarget || 0} unit="g" color="var(--muscle)" />
       </div>
+
+      {goalPhases.length > 0 && (
+        <div className="card">
+          <h3 style={{ fontFamily: "var(--font-display)", fontSize: 13, textTransform: "uppercase", color: "var(--text-dim)", marginBottom: 4 }}>Goal Phases</h3>
+          <p className="meal-desc" style={{ marginBottom: 12 }}>
+            Broken into {goalPhases.length} chunks of about 3 months each — the next one unlocks once you actually hit this one&rsquo;s target, whenever that ends up being.
+          </p>
+          <div className="phase-list">
+            {goalPhases.map((p) => (
+              <div key={p.index} className={`phase-item${p.complete ? " complete" : ""}${p.current ? " current" : ""}${!p.unlocked ? " locked" : ""}`}>
+                <div>
+                  <div className="phase-label">
+                    {p.complete ? "✅ " : !p.unlocked ? "🔒 " : ""}
+                    {p.label}
+                    {p.current ? " · in progress" : ""}
+                  </div>
+                  <div className="phase-range">
+                    {fmtWeight(p.startWeightLb, profile?.units)} → {fmtWeight(p.targetWeightLb, profile?.units)}
+                    {!p.complete ? ` · est. ${fmtDateLong(p.estimatedDate)}` : ""}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="card">
         <h3 style={{ fontFamily: "var(--font-display)", fontSize: 13, textTransform: "uppercase", color: "var(--text-dim)", marginBottom: 12 }}>Phase Progress</h3>
