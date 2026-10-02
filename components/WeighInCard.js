@@ -35,13 +35,20 @@ export default function WeighInCard({ profile, todayRow, onSaved }) {
       setErr("Enter a weight.");
       return;
     }
-    let bf = null;
-    if (bodyFat.trim() !== "") {
-      bf = parseFloat(bodyFat);
-      if (Number.isNaN(bf)) {
-        setErr("Body fat % should be a number.");
-        return;
-      }
+    // Body fat % isn't optional even though it's a separate field: the
+    // coach's trend math and the Weekly Recalibration both only treat a day
+    // as a usable reading when it has BOTH weight and body fat together
+    // (that's what deriving lean/fat mass needs) — a weight-only row here
+    // would show on Overview's tiles but be silently invisible everywhere
+    // else, which is a worse trap than just asking for both up front.
+    if (!bodyFat.trim()) {
+      setErr("Body fat % is needed too — the coach and your trend both rely on weight and body fat together.");
+      return;
+    }
+    const bf = parseFloat(bodyFat);
+    if (Number.isNaN(bf)) {
+      setErr("Body fat % should be a number.");
+      return;
     }
     setSaving(true);
     setErr("");
@@ -96,7 +103,7 @@ export default function WeighInCard({ profile, todayRow, onSaved }) {
           <input type="number" inputMode="decimal" step="0.1" value={weight} onChange={(e) => setWeight(e.target.value)} />
         </div>
         <div className="field">
-          <label className="field-label">Body fat % (optional)</label>
+          <label className="field-label">Body fat %</label>
           <input type="number" inputMode="decimal" step="0.1" value={bodyFat} onChange={(e) => setBodyFat(e.target.value)} />
         </div>
       </div>
