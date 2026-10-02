@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { callClaude, textFromResponse, AnthropicConfigError } from "../../../lib/anthropic";
 import { COACHES, TOOLS, buildContext, systemPromptFor } from "../../../lib/coachContext";
+import { todayIso } from "../../../lib/coaching";
 
 const HISTORY_LIMIT = 16;
 
@@ -35,13 +36,28 @@ export async function POST(request) {
     const { data: profile, error: profileErr } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
     if (profileErr) throw profileErr;
 
-    const { data: historyRows, error: historyErr } = await supabase
+    let historyQuery = supabase
       .from("coach_messages")
       .select("role, body, created_at")
       .eq("user_id", userId)
       .eq("coach", coach)
       .order("created_at", { ascending: false })
       .limit(HISTORY_LIMIT);
+    // The Nutritionist's "Logged so far today" total (coachContext.js) resets
+    // at midnight and is always recalculated fresh — but with no date filter
+    // here, yesterday's chat (including a total it stated for a now-stale
+    // day) stays in history and invites the model to carry that old number
+    // forward instead of trusting today's real one. Confirmed doing exactly
+    // this: a reply stated 3050 kcal when the actual logged-today figure was
+    // 790 — precisely yesterday's total plus today's new items. Scoping only
+    // this persona's history to today removes the stale number before it can
+    // be misread as current. The other two personas keep full history since
+    // their numbers always carry an explicit date (dayBreakdown, "today's
+    // session"), which doesn't have the same silent-staleness risk.
+    if (coach === "nutritionist") {
+      historyQuery = historyQuery.gte("created_at", `${todayIso()}T00:00:00`);
+    }
+    const { data: historyRows, error: historyErr } = await historyQuery;
     if (historyErr) throw historyErr;
     const history = (historyRows || []).slice().reverse().map((r) => ({ role: r.role, content: r.body }));
 
@@ -122,6 +138,19 @@ export async function POST(request) {
     const replyText =
       textFromResponse(response) ||
       (loggedMeals.length ? "Logged that for you." : "Got it — let me know if you'd like me to log that.");
+
+    // Defense in depth against a known failure mode: the model stating food
+    // was logged (confirmed happening — "Got that logged — about 380 kcal...")
+    // without ever calling log_meal, so nothing lands in food_log even though
+    // Harry's told otherwise. The system prompt now explicitly forbids this,
+    // but that's a probabilistic guardrail, not a guarantee — this just makes
+    // a slip visible in the server logs instead of only discoverable by
+    // reconstructing it from the database after the fact.
+    if (loggedMeals.length === 0 && /\b(logged|got that|added (that|it)|noted (that|it))\b/i.test(replyText)) {
+      console.warn("Coach chat: reply reads like a food-logging confirmation but no log_meal call succeeded this turn.", {
+        userId, coach, message: message.trim(), replyText,
+      });
+    }
 
     const loggedMeal = loggedMeals[0] || null;
 
