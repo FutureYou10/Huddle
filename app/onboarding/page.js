@@ -7,7 +7,7 @@ import { useProfile } from "../../lib/useProfile";
 import { isOnboarded } from "../../lib/onboardingStatus";
 import {
   todayIso, mondayOf, toStorageLb, deriveLeanMass, PACE_LABEL, GOAL_LABEL, pacesForGoal, DAY_LABELS,
-  fmtDateLong, fmtWeight, projectEndDateFromPace,
+  fmtDateLong, fmtWeight, projectEndDateFromPace, projectGoalBodyFatPct,
 } from "../../lib/coaching";
 import { splitOptionsFor } from "../../lib/splitTemplates";
 import { previewPlanDays, generatePlan, dayTypeNamesFor } from "../../lib/planGenerator";
@@ -68,6 +68,11 @@ function deriveInitialForm(profile, latestMetric) {
     activityLevel: "light",
     goalWeight: toDisplay(profile?.goal_weight ?? null),
     goalBodyFatPct: profile?.goal_body_fat_pct != null ? String(profile.goal_body_fat_pct) : "",
+    // Whether the person has typed their own goal body-fat % — until they
+    // do, it's kept in sync with an estimate computed from goal weight (see
+    // setGoalWeight/projectGoalBodyFatPct). An existing saved value counts
+    // as theirs, so rebuilding a plan doesn't silently overwrite it.
+    goalBodyFatPctTouched: profile?.goal_body_fat_pct != null,
     restWeekdays: restWeekdays.length ? restWeekdays : [2, 6],
     splitId: "",
     excludedIds: [],
@@ -162,16 +167,61 @@ export default function OnboardingPage() {
   function setUnits(units) {
     setError("");
     // The numbers already typed were in the old unit — clearing them beats
-    // silently reinterpreting "180" as kg instead of lb.
-    setForm((f) => ({ ...f, units, weight: "", goalWeight: "" }));
+    // silently reinterpreting "180" as kg instead of lb. Clears the
+    // goal-body-fat estimate along with goalWeight too, unless the person
+    // typed their own number in (goalBodyFatPctTouched) — that's theirs to keep.
+    setForm((f) => ({
+      ...f,
+      units,
+      weight: "",
+      goalWeight: "",
+      goalBodyFatPct: f.goalBodyFatPctTouched ? f.goalBodyFatPct : "",
+    }));
   }
 
   function setGoal(goal) {
     setError("");
     setForm((f) => {
       const valid = pacesForGoal(goal);
-      return { ...f, goal, pace: valid.includes(f.pace) ? f.pace : "" };
+      const next = { ...f, goal, pace: valid.includes(f.pace) ? f.pace : "" };
+      // The goal direction changes which compartment the body-fat estimate
+      // assumes is held fixed (see projectGoalBodyFatPct) — recompute it
+      // unless the person's already typed their own number.
+      if (!f.goalBodyFatPctTouched && f.goalWeight.trim() !== "") {
+        const weightLbNow = toStorageLb(parseFloat(f.weight), f.units);
+        const bodyFatPctNow = parseFloat(f.bodyFat);
+        const goalWeightLbNow = toStorageLb(parseFloat(f.goalWeight), f.units);
+        const estimated = projectGoalBodyFatPct(weightLbNow, bodyFatPctNow, goalWeightLbNow, goal);
+        next.goalBodyFatPct = estimated != null ? String(Math.round(estimated * 10) / 10) : "";
+      }
+      return next;
     });
+  }
+
+  // Goal weight is the number people actually have in mind; goal body-fat %
+  // almost never is. So typing a goal weight keeps the body-fat field in
+  // sync with an estimate (today's lean mass held fixed for a fat-loss/
+  // recomp goal, today's fat mass held fixed for a muscle-gain goal) —
+  // right up until the person types their own number into that field,
+  // which flips goalBodyFatPctTouched and leaves it alone from then on.
+  function setGoalWeight(value) {
+    setError("");
+    setForm((f) => {
+      const next = { ...f, goalWeight: value };
+      if (!f.goalBodyFatPctTouched) {
+        const weightLbNow = toStorageLb(parseFloat(f.weight), f.units);
+        const bodyFatPctNow = parseFloat(f.bodyFat);
+        const goalWeightLbNow = value.trim() !== "" ? toStorageLb(parseFloat(value), f.units) : null;
+        const estimated = projectGoalBodyFatPct(weightLbNow, bodyFatPctNow, goalWeightLbNow, f.goal);
+        next.goalBodyFatPct = estimated != null ? String(Math.round(estimated * 10) / 10) : "";
+      }
+      return next;
+    });
+  }
+
+  function setGoalBodyFatPct(value) {
+    setError("");
+    setForm((f) => ({ ...f, goalBodyFatPct: value, goalBodyFatPctTouched: true }));
   }
 
   function toggleRestDay(i) {
@@ -437,26 +487,34 @@ export default function OnboardingPage() {
             <>
               <p className="eyebrow" style={{ marginBottom: 10 }}>Your Target Numbers</p>
               <p className="field-hint" style={{ marginTop: -4, marginBottom: 10 }}>
-                Optional — only fill these in if you&apos;ve got a number in mind. We work out the date from the pace
-                you already picked, rather than asking you to guess one — that&apos;s what keeps the calorie target
-                realistic instead of forcing through an unsafe deficit or surplus to hit an arbitrary date.
+                Optional — only fill this in if you&apos;ve got a goal weight in mind. We work out the date from the
+                pace you already picked, rather than asking you to guess one — that&apos;s what keeps the calorie
+                target realistic instead of forcing through an unsafe deficit or surplus to hit an arbitrary date.
               </p>
               <div className="field-row">
                 <div className="field">
                   <label className="field-label">Goal weight ({form.units === "metric" ? "kg" : "lb"})</label>
-                  <input type="number" step="0.1" value={form.goalWeight} onChange={(e) => set("goalWeight", e.target.value)} />
+                  <input type="number" step="0.1" value={form.goalWeight} onChange={(e) => setGoalWeight(e.target.value)} />
                 </div>
                 <div className="field">
-                  <label className="field-label">Goal body fat %</label>
-                  <input type="number" step="0.1" value={form.goalBodyFatPct} onChange={(e) => set("goalBodyFatPct", e.target.value)} />
+                  <label className="field-label">Goal body fat %{!form.goalBodyFatPctTouched && form.goalBodyFatPct ? " (estimated)" : ""}</label>
+                  <input type="number" step="0.1" value={form.goalBodyFatPct} onChange={(e) => setGoalBodyFatPct(e.target.value)} />
                 </div>
               </div>
               {goalWeightLbNow != null ? (
-                <p className="note" style={{ marginBottom: 0 }}>
-                  {projectedEndDate
-                    ? <>At {PACE_LABEL[form.pace] || "your chosen pace"}, that&apos;s roughly <strong>{fmtDateLong(projectedEndDate)}</strong>.</>
-                    : "Pick a pace on the previous step to see an estimated date."}
-                </p>
+                <>
+                  {!form.goalBodyFatPctTouched && form.goalBodyFatPct && (
+                    <p className="field-hint" style={{ marginBottom: 8 }}>
+                      Estimated from your goal weight, assuming you {form.goal === "muscle" ? "add that weight as muscle" : "keep the muscle you have now"} —
+                      most people don&apos;t know their target body fat %, so we work it out rather than ask. Type your own number if you&apos;ve got one (e.g. from a scan).
+                    </p>
+                  )}
+                  <p className="note" style={{ marginBottom: 0 }}>
+                    {projectedEndDate
+                      ? <>At {PACE_LABEL[form.pace] || "your chosen pace"}, that&apos;s roughly <strong>{fmtDateLong(projectedEndDate)}</strong>.</>
+                      : "Pick a pace on the previous step to see an estimated date."}
+                  </p>
+                </>
               ) : (
                 <p className="field-hint" style={{ marginBottom: 0 }}>No goal weight yet — that&apos;s fine, we&apos;ll track your trend without a fixed target date.</p>
               )}
@@ -593,6 +651,24 @@ export default function OnboardingPage() {
               ))}
 
               <p className="field-label" style={{ marginTop: 16 }}>Day-One Nutrition Targets</p>
+              {nutritionPreview.floor_applied && (
+                <p
+                  style={{
+                    fontSize: 12,
+                    lineHeight: 1.5,
+                    color: "var(--warn)",
+                    background: "color-mix(in srgb, var(--warn) 10%, transparent)",
+                    border: "1px solid color-mix(in srgb, var(--warn) 30%, transparent)",
+                    borderRadius: 10,
+                    padding: "9px 11px",
+                    marginBottom: 10,
+                  }}
+                >
+                  Your chosen pace works out to ~{nutritionPreview.naive_calorie_target} kcal/day, which is below a
+                  safe minimum for your stats — we&apos;ve held it at {nutritionPreview.daily_calorie_target} instead.
+                  Go back and pick a slower pace if you&apos;d rather have more food to work with.
+                </p>
+              )}
               <div className="stat-row">
                 <div className="stat">
                   <div className="k">Calories</div>
