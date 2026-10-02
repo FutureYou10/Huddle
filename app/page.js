@@ -15,6 +15,7 @@ import DayBoxGrid from "../components/charts/DayBoxGrid";
 import PhaseProgressChart from "../components/charts/PhaseProgressChart";
 import RingStat from "../components/charts/RingStat";
 import RecapModal from "../components/RecapModal";
+import WeighInCard from "../components/WeighInCard";
 import { buildRecap, latestCompletedWeek, latestCompletedMonth } from "../lib/recap";
 
 const PACE_TAG_LABEL = { ahead: "Ahead of pace", ontrack: "On track", behind: "Behind pace", nodata: "Still building trend" };
@@ -132,6 +133,18 @@ export default function OverviewPage() {
     setRecap({ key: range.key || range.end, title: period === "week" ? "Your Week" : "Your Month", rangeStart: range.start, rangeEnd: range.end, cards });
   }
 
+  // Merge a manually-logged weigh-in straight into local state so the whole
+  // page (latest/prev, Phase Progress, Since You Started…) recomputes off
+  // it immediately — no refetch needed.
+  function handleWeighInSaved(row) {
+    setMetrics((m) => {
+      const others = m.filter((r) => r.date !== row.date);
+      return [...others, row].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    });
+  }
+
+  const todayRow = metrics.find((m) => m.date === today) || null;
+
   const leanNow = latest ? deriveLeanMass(latest.weight, latest.body_fat) : null;
   const leanPrev = prev ? deriveLeanMass(prev.weight, prev.body_fat) : null;
   const fatNow = latest ? deriveFatMass(latest.weight, latest.body_fat) : null;
@@ -219,6 +232,8 @@ export default function OverviewPage() {
         <button type="button" className="btn secondary" style={{ width: "auto", padding: "8px 14px" }} onClick={() => openRecap("week")}>🎉 Weekly Recap</button>
         <button type="button" className="btn secondary" style={{ width: "auto", padding: "8px 14px" }} onClick={() => openRecap("month")}>📅 Monthly Recap</button>
       </div>
+
+      <WeighInCard profile={profile} todayRow={todayRow} onSaved={handleWeighInSaved} />
 
       <div className="card">
         <p className="eyebrow" style={{ marginBottom: 10 }}>Today</p>
