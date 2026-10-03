@@ -38,7 +38,16 @@ export async function GET(request) {
       .eq("as_of", today)
       .maybeSingle();
     if (existingErr) throw existingErr;
-    if (existing) return NextResponse.json({ asOf: existing.as_of, items: existing.items, cached: true });
+    // Only trust a cached row that actually has something in it. A row with
+    // items: [] isn't "nothing to flag today" — the tool call is forced
+    // (toolChoice), so an empty array means the call came back short (cut
+    // off, or the model didn't fill it in) rather than a deliberate verdict.
+    // Treating that as a 24h cache meant one bad Claude response made the
+    // card disappear from the app for the rest of the day with nothing to
+    // retry it — which is what was actually happening to Harry.
+    if (existing && Array.isArray(existing.items) && existing.items.length > 0) {
+      return NextResponse.json({ asOf: existing.as_of, items: existing.items, cached: true });
+    }
 
     const { data: profile, error: profileErr } = await supabase.from("profiles").select("nutrition_insights_min_logged_days").eq("id", userId).maybeSingle();
     if (profileErr) throw profileErr;
@@ -54,17 +63,31 @@ export async function GET(request) {
       messages: [{ role: "user", content: `This week's logged meals:\n${contextText}` }],
       tools: [NUTRITION_GAPS_TOOL],
       toolChoice: { type: "tool", name: "nutrition_gaps" },
-      maxTokens: 700,
+      maxTokens: 1024,
     });
     const input = toolInputFromResponse(response, "nutrition_gaps");
     const items = Array.isArray(input?.items) ? input.items : [];
 
-    // Upsert, not insert — two near-simultaneous loads (e.g. two tabs) could
-    // both pass the "not cached yet" check above before either writes.
-    const { error: insertErr } = await supabase
-      .from("nutrition_insights")
-      .upsert({ user_id: userId, as_of: today, items }, { onConflict: "user_id,as_of" });
-    if (insertErr) throw insertErr;
+    if (!items.length) {
+      // Shouldn't happen with loggedDayCount >= minLoggedDays and a forced
+      // tool call, but it has — log enough to diagnose it if it recurs
+      // rather than silently shipping an empty card.
+      console.error("Nutrition insights: forced tool call returned no items", {
+        userId,
+        loggedDayCount,
+        stopReason: response?.stop_reason,
+        hadToolUse: (response?.content || []).some((b) => b.type === "tool_use"),
+      });
+    } else {
+      // Upsert, not insert — two near-simultaneous loads (e.g. two tabs) could
+      // both pass the "not cached yet" check above before either writes. Only
+      // a non-empty result is worth caching for the rest of the day — see the
+      // comment above the cache check.
+      const { error: insertErr } = await supabase
+        .from("nutrition_insights")
+        .upsert({ user_id: userId, as_of: today, items }, { onConflict: "user_id,as_of" });
+      if (insertErr) throw insertErr;
+    }
 
     return NextResponse.json({ asOf: today, items, cached: false });
   } catch (err) {

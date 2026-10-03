@@ -4,7 +4,7 @@ import { Fragment, useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import {
   fmtDate, fmtDateLong, fmtWeight, fmtWeightDelta, todayIso, addDays, weekDates, dayTypeFor,
-  deriveLeanMass, deriveFatMass, requiredPace, fatMassTrend, paceTag, phaseProgress, fatLeanProgressSeries, isCalorieDayOnTarget,
+  deriveLeanMass, deriveFatMass, requiredPace, fatMassTrend, projectedLandingWeight, paceTag, phaseProgress, fatLeanProgressSeries, isCalorieDayOnTarget,
   deriveGoalPhases,
 } from "../lib/coaching";
 import { useProfile } from "../lib/useProfile";
@@ -208,6 +208,7 @@ export default function OverviewPage() {
   const required = latest ? requiredPace(profile, latest) : null;
   const trend = fatMassTrend(metrics);
   const tag = trend.building ? "nodata" : paceTag(trend.perWeek, required?.fatLossPerWeek);
+  const projectedWeightLb = projectedLandingWeight(trend, required, latest);
 
   const wDays = weekDates(today);
   const calWeek = wDays.map((d) => ({ date: d, value: calByDay.has(d) ? calByDay.get(d) : null, isToday: d === today }));
@@ -390,7 +391,8 @@ export default function OverviewPage() {
           </div>
         ) : (
           <div className="goal-hero-value" style={{ fontSize: 28 }}>
-            <span className={`pace-tag ${tag}`} style={{ fontSize: 11, verticalAlign: "middle" }}>{PACE_TAG_LABEL[tag]}</span>
+            {projectedWeightLb != null ? fmtWeight(projectedWeightLb, profile?.units) : "—"}
+            <span className={`pace-tag ${tag}`} style={{ fontSize: 11, verticalAlign: "middle", marginLeft: 10 }}>{PACE_TAG_LABEL[tag]}</span>
           </div>
         )}
         {required && (
@@ -409,7 +411,7 @@ export default function OverviewPage() {
         <details className="more" open={howOpen} onToggle={(e) => setHowOpen(e.target.open)} style={{ marginTop: 8 }}>
           <summary style={{ cursor: "pointer", fontSize: 11.5, fontWeight: 600, color: "var(--muscle)" }}>{howOpen ? "Hide detail" : "How this is calculated"}</summary>
           <div className="more-body" style={{ fontSize: 11.5, color: "var(--text-faint)", lineHeight: 1.6, marginTop: 6 }}>
-            <p>Goal fat mass = goal weight × goal body-fat% ({profile?.goal_weight ?? "—"} × {profile?.goal_body_fat_pct ?? "—"}%). Required pace = (current fat/lean mass − goal fat/lean mass) ÷ weeks left, recalculated from today&rsquo;s reading every time this loads. With fewer than 7 real weigh-ins a slope is noise rather than a forecast, so the pace tag stays off until there&rsquo;s a real run of data.</p>
+            <p>Goal fat mass = goal weight × goal body-fat% ({profile?.goal_weight ?? "—"} × {profile?.goal_body_fat_pct ?? "—"}%). Required pace = (current fat/lean mass − goal fat/lean mass) ÷ weeks left, recalculated from today&rsquo;s reading every time this loads. The weight above projects your actual fat-loss/muscle-gain trend from the last 21 days of weigh-ins forward to {fmtDate(profile?.end_date)} — it&rsquo;s where you&rsquo;re actually headed, not where you need to be. With fewer than 4 real weigh-ins a slope is noise rather than a trend, so the projection stays off until there&rsquo;s a short real run of data.</p>
           </div>
         </details>
       </div>
