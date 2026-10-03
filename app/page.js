@@ -42,6 +42,8 @@ export default function OverviewPage() {
   const [error, setError] = useState("");
   const [howOpen, setHowOpen] = useState(false);
   const [recap, setRecap] = useState(null); // { key, title, rangeStart, rangeEnd, cards } | null
+  const [dailyInsight, setDailyInsight] = useState(null); // { id, body, created_at } | null
+  const [dismissingInsight, setDismissingInsight] = useState(false);
 
   useEffect(() => {
     if (!profile) return;
@@ -70,6 +72,45 @@ export default function OverviewPage() {
     });
     return () => { cancelled = true; };
   }, [profile]);
+
+  // The daily Transformation check-in (app/api/cron/daily-coach) lands as a
+  // dismissable card here instead of a chat message — this is the only place
+  // it's fetched from, so it's cheap: just the latest not-yet-dismissed row.
+  useEffect(() => {
+    if (!profile) return;
+    let cancelled = false;
+    (async () => {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) return;
+      const res = await fetch("/api/coach-insights?coach=transformation&kind=daily_checkin", {
+        headers: { authorization: `Bearer ${token}` },
+      }).then((r) => r.json()).catch((e) => ({ error: e.message }));
+      if (cancelled) return;
+      setDailyInsight(res.error ? null : res.insight);
+    })();
+    return () => { cancelled = true; };
+  }, [profile]);
+
+  async function dismissDailyInsight() {
+    if (!dailyInsight || dismissingInsight) return;
+    setDismissingInsight(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const res = await fetch("/api/coach-insights", {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+        body: JSON.stringify({ id: dailyInsight.id }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "Couldn't save that.");
+      setDailyInsight(null);
+    } catch (e) {
+      setError(e.message || "Couldn't save that.");
+    } finally {
+      setDismissingInsight(false);
+    }
+  }
 
   // Auto-pop a recap the first time this loads after its period ends — a
   // Sunday for the week just gone, the start of a new month for the month
@@ -242,6 +283,18 @@ export default function OverviewPage() {
         <button type="button" className="btn secondary" style={{ width: "auto", padding: "8px 14px" }} onClick={() => openRecap("week")}>🎉 Weekly Recap</button>
         <button type="button" className="btn secondary" style={{ width: "auto", padding: "8px 14px" }} onClick={() => openRecap("month")}>📅 Monthly Recap</button>
       </div>
+
+      {dailyInsight && (
+        <div className="card">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+            <p className="eyebrow" style={{ marginBottom: 10 }}>Today&rsquo;s Check-In <span style={{ textTransform: "none", fontWeight: 400 }}>from your Transformation Coach</span></p>
+            <button type="button" className="btn ghost" style={{ width: "auto", padding: "4px 10px", fontSize: 13 }} onClick={dismissDailyInsight} disabled={dismissingInsight}>
+              {dismissingInsight ? "…" : "Dismiss"}
+            </button>
+          </div>
+          <p className="note" style={{ margin: 0 }}>{dailyInsight.body}</p>
+        </div>
+      )}
 
       <WeighInCard profile={profile} todayRow={todayRow} onSaved={handleWeighInSaved} />
 

@@ -6,7 +6,8 @@ import { callClaude, textFromResponse, AnthropicConfigError } from "../../../../
 // Fired Wednesday evenings by Vercel Cron (see vercel.json) — replaces the
 // personal "Harry's Mid-Week Food Check-In" scheduled task. Same idea: by
 // Wednesday evening there's enough of the week logged to say something
-// useful about pace vs. the weekly calorie budget.
+// useful about pace vs. the weekly calorie budget. Lands as a dismissable
+// card on the Food page (coach_insights), not a chat message.
 export async function GET(request) {
   const auth = checkCronAuth(request);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
@@ -38,8 +39,8 @@ export async function GET(request) {
       const text = textFromResponse(response);
       if (text) {
         const { error: insertErr } = await supabase
-          .from("coach_messages")
-          .insert({ user_id: profile.id, coach: "nutritionist", role: "assistant", body: text, kind: "midweek_checkin" });
+          .from("coach_insights")
+          .insert({ user_id: profile.id, coach: "nutritionist", kind: "midweek_checkin", body: text });
         if (insertErr) throw insertErr;
       }
       results.push({ userId: profile.id, ok: true });

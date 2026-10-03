@@ -44,6 +44,8 @@ export default function FoodPage() {
   const [insights, setInsights] = useState(null); // { items, notEnoughData } | null while loading
   const [suggestion, setSuggestion] = useState(null); // { suggestion, notEnoughData } | null while loading
   const [deciding, setDeciding] = useState(false);
+  const [midweekInsight, setMidweekInsight] = useState(null); // { id, body, created_at } | null
+  const [dismissingInsight, setDismissingInsight] = useState(false);
 
   useEffect(() => {
     if (!profile) return;
@@ -79,16 +81,40 @@ export default function FoodPage() {
       const token = sessionData.session?.access_token;
       if (!token) return;
       const headers = { authorization: `Bearer ${token}` };
-      const [insightsRes, suggestionRes] = await Promise.all([
+      const [insightsRes, suggestionRes, midweekRes] = await Promise.all([
         fetch("/api/nutrition-insights", { headers }).then((r) => r.json()).catch((e) => ({ error: e.message })),
         fetch("/api/target-suggestions", { headers }).then((r) => r.json()).catch((e) => ({ error: e.message })),
+        // The Wednesday mid-week check-in (app/api/cron/midweek-checkin) —
+        // a dismissable card here instead of a chat message.
+        fetch("/api/coach-insights?coach=nutritionist&kind=midweek_checkin", { headers }).then((r) => r.json()).catch((e) => ({ error: e.message })),
       ]);
       if (cancelled) return;
       setInsights(insightsRes.error ? { items: [], notEnoughData: true } : insightsRes);
       setSuggestion(suggestionRes.error ? { suggestion: null } : suggestionRes);
+      setMidweekInsight(midweekRes.error ? null : midweekRes.insight);
     })();
     return () => { cancelled = true; };
   }, [profile]);
+
+  async function dismissMidweekInsight() {
+    if (!midweekInsight || dismissingInsight) return;
+    setDismissingInsight(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const res = await fetch("/api/coach-insights", {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+        body: JSON.stringify({ id: midweekInsight.id }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "Couldn't save that.");
+      setMidweekInsight(null);
+    } catch (e) {
+      setError(e.message || "Couldn't save that.");
+    } finally {
+      setDismissingInsight(false);
+    }
+  }
 
   async function decide(action) {
     if (!suggestion?.suggestion || deciding) return;
@@ -184,6 +210,18 @@ export default function FoodPage() {
     <div className="shell shell-with-nav">
       <AppHeader title="Food" />
       {(error || profileError) && <div className="error-note">{error || profileError}</div>}
+
+      {midweekInsight && (
+        <div className="card">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+            <p className="eyebrow" style={{ marginBottom: 10 }}>Mid-Week Check-In <span style={{ textTransform: "none", fontWeight: 400 }}>from your Nutritionist</span></p>
+            <button type="button" className="btn ghost" style={{ width: "auto", padding: "4px 10px", fontSize: 13 }} onClick={dismissMidweekInsight} disabled={dismissingInsight}>
+              {dismissingInsight ? "…" : "Dismiss"}
+            </button>
+          </div>
+          <p className="note" style={{ margin: 0 }}>{midweekInsight.body}</p>
+        </div>
+      )}
 
       {suggestion?.suggestion?.status === "pending" && (
         <div className="card recalibration-card">

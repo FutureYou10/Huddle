@@ -6,8 +6,9 @@ import { callClaude, textFromResponse, AnthropicConfigError } from "../../../../
 // Fired once a day by Vercel Cron (see vercel.json). Replaces the personal
 // "Harry's Daily Health Coach" scheduled task with something that runs for
 // any onboarded user, not just Harry — same trend math as the Transformation
-// Coach chat and the Overview dashboard, delivered as a proactive DM instead
-// of waiting for him to open the app.
+// Coach chat and the Overview dashboard. Lands as a dismissable card on the
+// Overview page (coach_insights), not a chat message — a proactive check-in
+// read on the dashboard, not buried in a chat thread.
 export async function GET(request) {
   const auth = checkCronAuth(request);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
@@ -39,8 +40,8 @@ export async function GET(request) {
       const text = textFromResponse(response);
       if (text) {
         const { error: insertErr } = await supabase
-          .from("coach_messages")
-          .insert({ user_id: profile.id, coach: "transformation", role: "assistant", body: text, kind: "daily_checkin" });
+          .from("coach_insights")
+          .insert({ user_id: profile.id, coach: "transformation", kind: "daily_checkin", body: text });
         if (insertErr) throw insertErr;
       }
       results.push({ userId: profile.id, ok: true });
