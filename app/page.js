@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useState } from "react";
+import Link from "next/link";
 import { supabase } from "../lib/supabaseClient";
 import {
   fmtDate, fmtDateLong, fmtWeight, fmtWeightDelta, todayIso, addDays, weekDates, dayTypeFor,
@@ -469,6 +470,10 @@ export default function OverviewPage() {
             <TrendLine points={leanTrendPts} paceValue={required?.currentLean} color="var(--muscle)" />
           </div>
         </div>
+        <p className="field-hint" style={{ marginTop: 10 }}>
+          This runs off your daily weigh-ins. For a left/right segmental breakdown from a proper gym scale,{" "}
+          <Link href="/body-scan" style={{ color: "var(--muscle)", fontWeight: 600 }}>log a body scan</Link>.
+        </p>
       </div>
 
       <div className="card">

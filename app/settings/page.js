@@ -347,6 +347,17 @@ export default function SettingsPage() {
       </div>
 
       <div className="card">
+        <p className="eyebrow" style={{ marginBottom: 4 }}>Body Scans</p>
+        <p className="meal-desc" style={{ marginBottom: 10 }}>
+          Log readings from a proper body-composition scale — the gym machines with a left/right segmental
+          breakdown — separately from your daily weigh-ins, and see them next to your home scale.
+        </p>
+        <Link href="/body-scan" className="btn secondary" style={{ width: "auto", padding: "10px 18px", display: "inline-block" }}>
+          Log a body scan
+        </Link>
+      </div>
+
+      <div className="card">
         <p className="eyebrow" style={{ marginBottom: 4 }}>Nutrition &amp; Recalibration Rules</p>
         <p className="meal-desc" style={{ marginBottom: 10 }}>The numeric knobs behind the coaching math — these are the defaults the app shipped with.</p>
         <div className="field">
