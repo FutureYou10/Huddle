@@ -94,12 +94,23 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
+html {
+  /* Stops the whole page rubber-banding/panning as one unit on mobile —
+     without this, a touch-drag anywhere (even a bit outside a scrollable
+     element, or past the top/bottom of one) can nudge the entire viewport
+     around instead of just scrolling the content that's meant to scroll.
+     Each individually-scrolling area (e.g. .chat-thread below) still
+     scrolls normally — this only stops that scroll from chaining up into
+     dragging the page itself. */
+  overscroll-behavior: none;
+}
 body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
+  overscroll-behavior: none;
 }
 
 .shell {
@@ -540,6 +551,7 @@ details.more summary::-webkit-details-marker { display: none; }
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior-y: contain;
   display: flex;
   flex-direction: column;
   gap: 10px;
