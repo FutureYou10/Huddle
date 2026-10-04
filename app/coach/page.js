@@ -35,6 +35,7 @@ export default function CoachChatPage() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [speakingId, setSpeakingId] = useState(null);
+  const [streamingId, setStreamingId] = useState(null);
   const scrollRef = useRef(null);
 
   // Work out what's unread across all three threads once the profile's
@@ -125,6 +126,8 @@ export default function CoachChatPage() {
     const optimistic = { id: `local-${Date.now()}`, role: "user", body: text };
     setThreads((t) => ({ ...t, [tab]: [...(t[tab] || []), optimistic] }));
     setSending(true);
+    const replyId = `reply-${Date.now()}`;
+    let streamStarted = false;
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
@@ -134,13 +137,66 @@ export default function CoachChatPage() {
         headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
         body: JSON.stringify({ coach: tab, message: text }),
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Something went wrong.");
-      setThreads((t) => ({ ...t, [tab]: [...(t[tab] || []), { id: `reply-${Date.now()}`, role: "assistant", body: json.reply }] }));
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json.error || "Something went wrong.");
+      }
+      if (!res.body) throw new Error("Streaming isn't supported in this browser.");
+
+      // The reply arrives as newline-delimited JSON chunks (see
+      // app/api/coach/route.js) rather than one finished object, so the
+      // assistant bubble fills in as it types instead of popping in whole
+      // once everything — including any tool-use round-trips — is done.
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let streamError = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop();
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          let evt;
+          try {
+            evt = JSON.parse(line);
+          } catch {
+            continue;
+          }
+          if (evt.type === "delta") {
+            if (!streamStarted) {
+              streamStarted = true;
+              setStreamingId(replyId);
+              setThreads((t) => ({ ...t, [tab]: [...(t[tab] || []), { id: replyId, role: "assistant", body: evt.text }] }));
+            } else {
+              setThreads((t) => ({
+                ...t,
+                [tab]: (t[tab] || []).map((m) => (m.id === replyId ? { ...m, body: m.body + evt.text } : m)),
+              }));
+            }
+          } else if (evt.type === "done") {
+            setThreads((t) => ({
+              ...t,
+              [tab]: (t[tab] || []).map((m) => (m.id === replyId ? { ...m, body: evt.reply ?? m.body } : m)),
+            }));
+          } else if (evt.type === "error") {
+            streamError = evt.error || "Something went wrong.";
+          }
+        }
+      }
+
+      if (streamError) {
+        setThreads((t) => ({ ...t, [tab]: (t[tab] || []).filter((m) => m.id !== replyId) }));
+        throw new Error(streamError);
+      }
     } catch (err) {
       setError(err.message || "Couldn't reach your coach — try again.");
     } finally {
       setSending(false);
+      setStreamingId(null);
     }
   }
 
@@ -222,7 +278,7 @@ export default function CoachChatPage() {
             <div key={m.id} className={`coach-msg coach-msg-${m.role}`}>{m.body}</div>
           )
         )}
-        {sending && (
+        {sending && !streamingId && (
           <div className="coach-msg-with-avatar">
             <span className="coach-msg-avatar">
               <ActiveFace size={30} />
