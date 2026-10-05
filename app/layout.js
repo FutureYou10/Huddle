@@ -3,12 +3,16 @@ import "./globals.css";
 export const metadata = {
   title: "Huddle",
   description: "Your daily coaching dashboard",
+  applicationName: "Huddle",
+  icons: { icon: "/icon-192.png", apple: "/apple-touch-icon.png" },
+  appleWebApp: { capable: true, title: "Huddle", statusBarStyle: "default" },
 };
 
 export const viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
+  themeColor: "#121316",
 };
 
 export default function RootLayout({ children }) {

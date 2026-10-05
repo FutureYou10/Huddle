@@ -8,6 +8,7 @@ import { useProfile } from "../../lib/useProfile";
 import { applyTheme } from "../../lib/theme";
 import AppHeader from "../../components/AppHeader";
 import BottomNav from "../../components/BottomNav";
+import ReminderSettings from "../../components/ReminderSettings";
 
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -345,6 +346,8 @@ export default function SettingsPage() {
         </Link>
         <p className="field-hint">This replaces your current exercise list and this week's targets — it won't touch logged history.</p>
       </div>
+
+      <ReminderSettings profile={profile} />
 
       <div className="card">
         <p className="eyebrow" style={{ marginBottom: 4 }}>Body Scans</p>
