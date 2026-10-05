@@ -187,6 +187,16 @@ h1.page-title {
 .meal-desc { font-size: 11.5px; color: var(--text-faint); margin-top: 1px; }
 .meal-cal { font-family: var(--font-display); font-weight: 600; font-size: 13.5px; color: var(--text-dim); white-space: nowrap; font-variant-numeric: tabular-nums; }
 
+.meal-item { border-bottom: 1px solid var(--line); }
+.meal-item:last-child { border-bottom: none; }
+.meal-item .meal-row { border-bottom: none; }
+.meal-right { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.meal-edit-btn { background: none; border: none; padding: 2px 0; font-size: 11.5px; font-weight: 600; color: var(--muscle); cursor: pointer; font-family: inherit; }
+.meal-editor { padding: 4px 0 12px; }
+.meal-editor-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 10px; }
+.meal-delete { color: var(--bad) !important; }
+.meal-delete-confirm { color: var(--bad); border-color: var(--bad); }
+
 .btn {
   font-family: var(--font-body);
   font-size: 14px;

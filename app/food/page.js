@@ -33,6 +33,123 @@ const SOURCE_LABEL = {
   "Photo estimate": "Photo",
 };
 
+const EDIT_FIELDS = [
+  ["calories", "Calories"],
+  ["protein_g", "Protein g"],
+  ["carbs_g", "Carbs g"],
+  ["fat_g", "Fat g"],
+  ["fiber_g", "Fibre g"],
+];
+
+// One food-log row that opens into an inline editor on tap. Writes go straight
+// to Supabase under RLS (scoped by id + user_id as well), same direct-write
+// pattern as the weigh-in card.
+function MealRow({ m, userId, onSaved, onDeleted, onError }) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [form, setForm] = useState({});
+
+  function startEdit() {
+    setForm({
+      meal: m.meal || "",
+      description: m.description || "",
+      calories: m.calories ?? "",
+      protein_g: m.protein_g ?? "",
+      carbs_g: m.carbs_g ?? "",
+      fat_g: m.fat_g ?? "",
+      fiber_g: m.fiber_g ?? "",
+    });
+    setConfirmDelete(false);
+    setOpen(true);
+  }
+
+  async function save() {
+    if (busy) return;
+    if (!form.meal.trim()) return onError("Give the entry a meal name.");
+    const num = (v) => (v === "" || v == null ? null : Number(v));
+    const patch = {
+      meal: form.meal.trim(),
+      description: form.description.trim(),
+      calories: num(form.calories),
+      protein_g: num(form.protein_g),
+      carbs_g: num(form.carbs_g),
+      fat_g: num(form.fat_g),
+      fiber_g: num(form.fiber_g),
+    };
+    for (const [k] of EDIT_FIELDS) {
+      if (patch[k] != null && (!Number.isFinite(patch[k]) || patch[k] < 0)) return onError("Numbers need to be zero or more.");
+    }
+    setBusy(true);
+    const { data, error } = await supabase.from("food_log").update(patch).eq("id", m.id).eq("user_id", userId).select().maybeSingle();
+    setBusy(false);
+    if (error || !data) return onError(error?.message || "Couldn't save that change.");
+    onSaved(data);
+    setOpen(false);
+  }
+
+  async function remove() {
+    if (busy) return;
+    setBusy(true);
+    const { error } = await supabase.from("food_log").delete().eq("id", m.id).eq("user_id", userId);
+    setBusy(false);
+    if (error) return onError(error.message);
+    onDeleted(m.id);
+  }
+
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  return (
+    <div className="meal-item">
+      <div className="meal-row">
+        <div>
+          <div className="meal-name">{m.meal}{m.source && <span className="source-tag">{SOURCE_LABEL[m.source] || m.source}</span>}</div>
+          <div className="meal-desc">{m.description}</div>
+        </div>
+        <div className="meal-right">
+          <div className="meal-cal">{m.calories != null ? `${m.calories} kcal` : "—"}</div>
+          <button type="button" className="meal-edit-btn" onClick={() => (open ? setOpen(false) : startEdit())} aria-label={open ? "Close editor" : `Edit ${m.meal}`}>
+            {open ? "Close" : "Edit"}
+          </button>
+        </div>
+      </div>
+      {open && (
+        <div className="meal-editor">
+          <div className="field">
+            <label className="field-label">Meal</label>
+            <input type="text" value={form.meal} onChange={set("meal")} />
+          </div>
+          <div className="field">
+            <label className="field-label">Description</label>
+            <input type="text" value={form.description} onChange={set("description")} />
+          </div>
+          <div className="meal-editor-grid">
+            {EDIT_FIELDS.map(([k, label]) => (
+              <div className="field" key={k}>
+                <label className="field-label">{label}</label>
+                <input type="number" inputMode="decimal" min="0" step="any" value={form[k]} onChange={set(k)} />
+              </div>
+            ))}
+          </div>
+          <div className="btn-row">
+            <button type="button" className="btn primary" style={{ width: "auto", padding: "9px 18px" }} onClick={save} disabled={busy}>
+              {busy ? "Saving…" : "Save"}
+            </button>
+            {confirmDelete ? (
+              <button type="button" className="btn secondary meal-delete-confirm" style={{ width: "auto", padding: "9px 14px" }} onClick={remove} disabled={busy}>
+                Tap again to delete
+              </button>
+            ) : (
+              <button type="button" className="btn ghost meal-delete" onClick={() => setConfirmDelete(true)} disabled={busy}>Delete</button>
+            )}
+            <button type="button" className="btn ghost" onClick={() => setOpen(false)} disabled={busy}>Cancel</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function FoodPage() {
   const { loading: profileLoading, profile, error: profileError } = useProfile();
   const [target, setTarget] = useState(null);
@@ -144,6 +261,15 @@ export default function FoodPage() {
     } finally {
       setDeciding(false);
     }
+  }
+
+  function onMealSaved(row) {
+    setError("");
+    setMeals((ms) => ms.map((x) => (x.id === row.id ? row : x)));
+  }
+  function onMealDeleted(id) {
+    setError("");
+    setMeals((ms) => ms.filter((x) => x.id !== id));
   }
 
   if (profileLoading || (profile && loading)) return <div className="center-loading">Loading…</div>;
@@ -306,13 +432,7 @@ export default function FoodPage() {
           <div className="note">Nothing logged yet today — this fills in as your Nutritionist chat gets logged.</div>
         ) : (
           todaysMeals.map((m) => (
-            <div className="meal-row" key={m.id}>
-              <div>
-                <div className="meal-name">{m.meal}{m.source && <span className="source-tag">{SOURCE_LABEL[m.source] || m.source}</span>}</div>
-                <div className="meal-desc">{m.description}</div>
-              </div>
-              <div className="meal-cal">{m.calories != null ? `${m.calories} kcal` : "—"}</div>
-            </div>
+            <MealRow key={m.id} m={m} userId={profile.id} onSaved={onMealSaved} onDeleted={onMealDeleted} onError={setError} />
           ))
         )}
       </div>
@@ -331,13 +451,7 @@ export default function FoodPage() {
                   <span>{Math.round(dayTotal)} kcal</span>
                 </div>
                 {g.rows.map((m) => (
-                  <div className="meal-row" key={m.id}>
-                    <div>
-                      <div className="meal-name">{m.meal}{m.source && <span className="source-tag">{SOURCE_LABEL[m.source] || m.source}</span>}</div>
-                      <div className="meal-desc">{m.description}</div>
-                    </div>
-                    <div className="meal-cal">{m.calories != null ? `${m.calories} kcal` : "—"}</div>
-                  </div>
+                  <MealRow key={m.id} m={m} userId={profile.id} onSaved={onMealSaved} onDeleted={onMealDeleted} onError={setError} />
                 ))}
               </div>
             );

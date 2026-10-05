@@ -76,7 +76,7 @@ export async function POST(request) {
     // log_meal is available from any of the three coach chats, not just the
     // Nutritionist's — Harry shouldn't have to switch tabs just to log food
     // he mentions mid-conversation with the Transformation Coach or Trainer.
-    const tools = [TOOLS.log_meal];
+    const tools = [TOOLS.log_meal, TOOLS.edit_meal, TOOLS.delete_meal];
     const messages = [...history, { role: "user", content: message.trim() }];
 
     // Everything from here streams back to Harry as it happens, instead of
@@ -116,6 +116,8 @@ export async function POST(request) {
         try {
           let response = await callClaudeStreaming({ system, messages, tools, onTextDelta });
           const loggedMeals = [];
+          // Successful edit_meal / delete_meal calls this turn.
+          let foodChanges = 0;
           let workingMessages = messages;
 
           // A single food-heavy message can need more than one log_meal call
@@ -152,6 +154,51 @@ export async function POST(request) {
                   loggedMeals.push(input);
                   toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content: "Logged." });
                 }
+              } else if (toolUse.name === "edit_meal") {
+                const input = toolUse.input || {};
+                const patch = {};
+                for (const key of ["meal", "description", "calories", "protein_g", "carbs_g", "fat_g", "fiber_g"]) {
+                  if (input[key] !== undefined && input[key] !== null) patch[key] = input[key];
+                }
+                if (input.id == null || Object.keys(patch).length === 0) {
+                  toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content: "Need an entry id and at least one field to change.", is_error: true });
+                } else {
+                  // Scoped by user_id as well as id (RLS already enforces it).
+                  const { data: updated, error: updErr } = await supabase
+                    .from("food_log")
+                    .update(patch)
+                    .eq("id", input.id)
+                    .eq("user_id", userId)
+                    .select("id");
+                  if (updErr) {
+                    toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content: `Failed to edit: ${updErr.message}`, is_error: true });
+                  } else if (!updated || updated.length === 0) {
+                    toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content: `No food log entry with id ${input.id} — nothing changed.`, is_error: true });
+                  } else {
+                    foodChanges += 1;
+                    toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content: "Updated." });
+                  }
+                }
+              } else if (toolUse.name === "delete_meal") {
+                const input = toolUse.input || {};
+                if (input.id == null) {
+                  toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content: "Need an entry id.", is_error: true });
+                } else {
+                  const { data: removed, error: delErr } = await supabase
+                    .from("food_log")
+                    .delete()
+                    .eq("id", input.id)
+                    .eq("user_id", userId)
+                    .select("id");
+                  if (delErr) {
+                    toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content: `Failed to delete: ${delErr.message}`, is_error: true });
+                  } else if (!removed || removed.length === 0) {
+                    toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content: `No food log entry with id ${input.id} — nothing deleted.`, is_error: true });
+                  } else {
+                    foodChanges += 1;
+                    toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content: "Deleted." });
+                  }
+                }
               } else {
                 toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content: "Unknown tool.", is_error: true });
               }
@@ -182,7 +229,11 @@ export async function POST(request) {
           }
 
           if (!replyText.trim()) {
-            const fallback = loggedMeals.length ? "Logged that for you." : "Got it — let me know if you'd like me to log that.";
+            const fallback = loggedMeals.length
+              ? "Logged that for you."
+              : foodChanges
+                ? "Done — your food log is updated."
+                : "Got it — let me know if you'd like me to log that.";
             replyText = fallback;
             enqueue({ type: "delta", text: fallback });
           }
@@ -195,8 +246,8 @@ export async function POST(request) {
           // guardrail, not a guarantee — this just makes a slip visible in
           // the server logs instead of only discoverable by reconstructing
           // it from the database after the fact.
-          if (loggedMeals.length === 0 && /\b(logged|got that|added (that|it)|noted (that|it))\b/i.test(replyText)) {
-            console.warn("Coach chat: reply reads like a food-logging confirmation but no log_meal call succeeded this turn.", {
+          if (loggedMeals.length === 0 && foodChanges === 0 && /\b(logged|got that|added (that|it)|noted (that|it)|removed|deleted|updated|fixed)\b/i.test(replyText)) {
+            console.warn("Coach chat: reply reads like a food-log confirmation but no log_meal/edit_meal/delete_meal call succeeded this turn.", {
               userId, coach, message: message.trim(), replyText,
             });
           }
