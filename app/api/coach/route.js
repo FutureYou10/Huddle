@@ -19,10 +19,20 @@ export async function POST(request) {
     const token = authHeader.replace(/^Bearer\s+/i, "");
     if (!token) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
 
-    const { coach, message } = await request.json();
+    const { coach, message, image } = await request.json();
     if (!COACHES.includes(coach)) return NextResponse.json({ error: "Unknown coach." }, { status: 400 });
     if (!message || typeof message !== "string" || !message.trim()) {
       return NextResponse.json({ error: "Empty message." }, { status: 400 });
+    }
+    // Optional food photo, already downscaled by the client. Validate shape and
+    // size here — it goes straight into the model request.
+    let imageBlock = null;
+    if (image) {
+      const okType = ["image/jpeg", "image/png", "image/webp"].includes(image.media_type);
+      if (!okType || typeof image.data !== "string" || !image.data || image.data.length > 3_000_000) {
+        return NextResponse.json({ error: "That photo couldn't be used — try another one." }, { status: 400 });
+      }
+      imageBlock = { type: "image", source: { type: "base64", media_type: image.media_type, data: image.data } };
     }
 
     const supabase = supabaseForToken(token);
@@ -77,7 +87,11 @@ export async function POST(request) {
     // Nutritionist's — Harry shouldn't have to switch tabs just to log food
     // he mentions mid-conversation with the Transformation Coach or Trainer.
     const tools = [TOOLS.log_meal, TOOLS.edit_meal, TOOLS.delete_meal];
-    const messages = [...history, { role: "user", content: message.trim() }];
+    // The photo itself isn't stored (only used for this turn); the saved history
+    // row just notes that one was attached.
+    const userContent = imageBlock ? [imageBlock, { type: "text", text: message.trim() }] : message.trim();
+    const messages = [...history, { role: "user", content: userContent }];
+    const savedUserBody = imageBlock ? `📷 ${message.trim()}` : message.trim();
 
     // Everything from here streams back to Harry as it happens, instead of
     // him staring at "…" until the whole exchange — including any tool-use
@@ -255,7 +269,7 @@ export async function POST(request) {
           const loggedMeal = loggedMeals[0] || null;
 
           const { error: insertHistErr } = await supabase.from("coach_messages").insert([
-            { user_id: userId, coach, role: "user", body: message.trim(), kind: "chat" },
+            { user_id: userId, coach, role: "user", body: savedUserBody, kind: "chat" },
             { user_id: userId, coach, role: "assistant", body: replyText, kind: "chat", meta: loggedMeals.length ? { logged_meals: loggedMeals } : null },
           ]);
           if (insertHistErr) {

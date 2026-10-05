@@ -36,6 +36,8 @@ export default function CoachChatPage() {
   const [error, setError] = useState("");
   const [speakingId, setSpeakingId] = useState(null);
   const [streamingId, setStreamingId] = useState(null);
+  const [image, setImage] = useState(null); // { preview, media_type, data } | null
+  const fileRef = useRef(null);
   const scrollRef = useRef(null);
 
   // Work out what's unread across all three threads once the profile's
@@ -118,12 +120,44 @@ export default function CoachChatPage() {
     setLoadingTab((s) => ({ ...s, [coach]: false }));
   }
 
+  // Shrinks a chosen photo to a JPEG no wider than 1280px before upload —
+  // phone photos are several MB, far over what the request limit allows and
+  // more detail than a plate of food needs.
+  async function pickImage(e) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    try {
+      const url = URL.createObjectURL(file);
+      const img = await new Promise((resolve, reject) => {
+        const el = new Image();
+        el.onload = () => resolve(el);
+        el.onerror = () => reject(new Error("Couldn't read that photo."));
+        el.src = url;
+      });
+      const scale = Math.min(1, 1280 / Math.max(img.width, img.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
+      setImage({ preview: dataUrl, media_type: "image/jpeg", data: dataUrl.split(",")[1] });
+      setError("");
+    } catch (err) {
+      setError(err.message || "Couldn't use that photo — try another one.");
+    }
+  }
+
   async function send() {
-    const text = input.trim();
-    if (!text || sending) return;
+    const typed = input.trim();
+    if ((!typed && !image) || sending) return;
+    const text = typed || "Photo of what I'm eating";
+    const attached = image;
     setInput("");
+    setImage(null);
     setError("");
-    const optimistic = { id: `local-${Date.now()}`, role: "user", body: text };
+    const optimistic = { id: `local-${Date.now()}`, role: "user", body: attached ? `📷 ${text}` : text };
     setThreads((t) => ({ ...t, [tab]: [...(t[tab] || []), optimistic] }));
     setSending(true);
     const replyId = `reply-${Date.now()}`;
@@ -135,7 +169,7 @@ export default function CoachChatPage() {
       const res = await fetch("/api/coach", {
         method: "POST",
         headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-        body: JSON.stringify({ coach: tab, message: text }),
+        body: JSON.stringify({ coach: tab, message: text, image: attached ? { media_type: attached.media_type, data: attached.data } : undefined }),
       });
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
@@ -289,7 +323,20 @@ export default function CoachChatPage() {
       </div>
 
       <div className="coach-input-row">
+        {image && (
+          <div className="coach-attach-preview">
+            <img src={image.preview} alt="Photo to send" />
+            <button type="button" onClick={() => setImage(null)} aria-label="Remove photo">×</button>
+          </div>
+        )}
         <div className="coach-input-wrap">
+          <input ref={fileRef} type="file" accept="image/*" onChange={pickImage} style={{ display: "none" }} />
+          <button type="button" className="coach-attach" onClick={() => fileRef.current?.click()} disabled={sending} aria-label="Attach a photo of your food">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+              <circle cx="12" cy="13" r="4" />
+            </svg>
+          </button>
           <textarea
             className="coach-input"
             rows={1}
@@ -303,7 +350,7 @@ export default function CoachChatPage() {
               }
             }}
           />
-          <button type="button" className="coach-send" onClick={send} disabled={sending || !input.trim()} aria-label="Send message">
+          <button type="button" className="coach-send" onClick={send} disabled={sending || (!input.trim() && !image)} aria-label="Send message">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 19V5" />
               <path d="M6 11l6-6 6 6" />
