@@ -12,6 +12,7 @@ import { useProfile } from "../lib/useProfile";
 import AppHeader from "../components/AppHeader";
 import BottomNav from "../components/BottomNav";
 import BarChartVsTarget from "../components/charts/BarChartVsTarget";
+import RangeTabs from "../components/RangeTabs";
 import TrendLine from "../components/charts/TrendLine";
 import DayBoxGrid from "../components/charts/DayBoxGrid";
 import PhaseProgressChart from "../components/charts/PhaseProgressChart";
@@ -42,6 +43,10 @@ export default function OverviewPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [howOpen, setHowOpen] = useState(false);
+  // Day / Week / Month switchers on the charts where a range makes sense.
+  const [nutRange, setNutRange] = useState("week");
+  const [stepsRange, setStepsRange] = useState("week");
+  const [trendRange, setTrendRange] = useState("month");
   const [recap, setRecap] = useState(null); // { key, title, rangeStart, rangeEnd, cards } | null
   const [dailyInsight, setDailyInsight] = useState(null); // { id, body, created_at } | null
   const [dismissingInsight, setDismissingInsight] = useState(false);
@@ -221,8 +226,33 @@ export default function OverviewPage() {
     return { date: d, value: row?.steps ?? null, isToday: d === today };
   });
 
-  const fatTrendPts = withWeight.slice(-4).map((m) => ({ date: m.date, value: deriveFatMass(m.weight, m.body_fat) }));
-  const leanTrendPts = withWeight.slice(-4).map((m) => ({ date: m.date, value: deriveLeanMass(m.weight, m.body_fat) }));
+  const last30 = Array.from({ length: 30 }, (_, i) => addDays(today, i - 29));
+  const calMonth = last30.map((d) => ({ date: d, value: calByDay.has(d) ? calByDay.get(d) : null, isToday: d === today }));
+  const proteinMonth = last30.map((d) => ({ date: d, value: proteinByDay.has(d) ? proteinByDay.get(d) : null, isToday: d === today }));
+  const stepsMonth = last30.map((d) => {
+    const row = metrics.find((m) => m.date === d);
+    return { date: d, value: row?.steps ?? null, isToday: d === today };
+  });
+  const carbTarget = target?.daily_carb_target_g ?? null;
+  const fatTarget = target?.daily_fat_target_g ?? null;
+  const todaySteps = metrics.find((m) => m.date === today)?.steps ?? null;
+
+  const TREND_DAYS = { week: 7, month: 30, quarter: 90 };
+  const trendSince = addDays(today, -TREND_DAYS[trendRange]);
+  const trendRows = withWeight.filter((m) => m.date >= trendSince);
+  const fatTrendPts = trendRows.map((m) => ({ date: m.date, value: deriveFatMass(m.weight, m.body_fat) }));
+  const leanTrendPts = trendRows.map((m) => ({ date: m.date, value: deriveLeanMass(m.weight, m.body_fat) }));
+
+  function progressRow(label, value, targetVal, color, unit = "g") {
+    const pct = targetVal ? Math.min(100, (value / targetVal) * 100) : 0;
+    return (
+      <div className="bar-row" key={label}>
+        <div className="bar-label">{label}</div>
+        <div className="bar-track"><div className="bar-fill" style={{ width: `${pct}%`, background: color }} /></div>
+        <div className="bar-val">{Math.round(value).toLocaleString()} / {targetVal != null ? Number(targetVal).toLocaleString() : "—"}{unit}</div>
+      </div>
+    );
+  }
 
   const daysToGoal = profile?.end_date
     ? Array.from({ length: Math.max(0, Math.round((new Date(profile.end_date) - new Date(today)) / 86400000)) + 1 }, (_, i) => addDays(today, i))
@@ -418,13 +448,30 @@ export default function OverviewPage() {
       </div>
 
       <div className="card">
-        <h3 style={{ fontFamily: "var(--font-display)", fontSize: 13, textTransform: "uppercase", color: "var(--text-dim)", marginBottom: 12 }}>
-          This Week <span className="meal-desc">{fmtDate(wDays[0])} – {fmtDate(wDays[6])}</span>
-        </h3>
-        <p className="meal-desc" style={{ marginBottom: 4 }}>Calories vs {calTarget ?? "—"} kcal/day target</p>
-        <BarChartVsTarget days={calWeek} target={calTarget || 0} color="var(--fat)" />
-        <p className="meal-desc" style={{ margin: "14px 0 4px" }}>Protein vs {proteinTarget ?? "—"}g/day target</p>
-        <BarChartVsTarget days={proteinWeek} target={proteinTarget || 0} unit="g" color="var(--muscle)" />
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+          <h3 style={{ fontFamily: "var(--font-display)", fontSize: 13, textTransform: "uppercase", color: "var(--text-dim)", margin: 0 }}>
+            {nutRange === "day" ? "Today" : nutRange === "week" ? "This Week" : "Last 30 Days"}{" "}
+            <span className="meal-desc">
+              {nutRange === "day" ? fmtDate(today) : nutRange === "week" ? `${fmtDate(wDays[0])} – ${fmtDate(wDays[6])}` : `${fmtDate(last30[0])} – ${fmtDate(today)}`}
+            </span>
+          </h3>
+          <RangeTabs value={nutRange} onChange={setNutRange} options={[{ key: "day", label: "Day" }, { key: "week", label: "Week" }, { key: "month", label: "Month" }]} label="Nutrition range" />
+        </div>
+        {nutRange === "day" ? (
+          <>
+            {progressRow("Calories", todayCal, calTarget, "var(--fat)", " kcal")}
+            {progressRow("Protein", todayProtein, proteinTarget, "var(--muscle)")}
+            {progressRow("Carbs", todayCarb, carbTarget, "var(--nutrition)")}
+            {progressRow("Fat", todayFat, fatTarget, "var(--training)")}
+          </>
+        ) : (
+          <>
+            <p className="meal-desc" style={{ marginBottom: 4 }}>Calories vs {calTarget ?? "—"} kcal/day target</p>
+            <BarChartVsTarget days={nutRange === "week" ? calWeek : calMonth} target={calTarget || 0} color="var(--fat)" />
+            <p className="meal-desc" style={{ margin: "14px 0 4px" }}>Protein vs {proteinTarget ?? "—"}g/day target</p>
+            <BarChartVsTarget days={nutRange === "week" ? proteinWeek : proteinMonth} target={proteinTarget || 0} unit="g" color="var(--muscle)" />
+          </>
+        )}
       </div>
 
       {goalPhases.length > 0 && (
@@ -459,7 +506,10 @@ export default function OverviewPage() {
       </div>
 
       <div className="card">
-        <h3 style={{ fontFamily: "var(--font-display)", fontSize: 13, textTransform: "uppercase", color: "var(--text-dim)", marginBottom: 12 }}>Fat Mass &amp; Lean Mass Trend</h3>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+          <h3 style={{ fontFamily: "var(--font-display)", fontSize: 13, textTransform: "uppercase", color: "var(--text-dim)", margin: 0 }}>Fat Mass &amp; Lean Mass Trend</h3>
+          <RangeTabs value={trendRange} onChange={setTrendRange} options={[{ key: "week", label: "Week" }, { key: "month", label: "Month" }, { key: "quarter", label: "Quarter" }]} label="Trend range" />
+        </div>
         <div className="trend-wrap" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
           <div>
             <p className="meal-desc" style={{ color: "var(--fat)", fontWeight: 600, marginBottom: 4 }}>Fat Mass</p>
@@ -477,8 +527,17 @@ export default function OverviewPage() {
       </div>
 
       <div className="card">
-        <h3 style={{ fontFamily: "var(--font-display)", fontSize: 13, textTransform: "uppercase", color: "var(--text-dim)", marginBottom: 12 }}>Steps — Last 7 Days <span className="meal-desc">vs {stepsTarget.toLocaleString()}/day target</span></h3>
-        <BarChartVsTarget days={stepsSeries} target={stepsTarget} color="var(--muscle)" targetLabel={stepsTarget.toLocaleString()} />
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+          <h3 style={{ fontFamily: "var(--font-display)", fontSize: 13, textTransform: "uppercase", color: "var(--text-dim)", margin: 0 }}>
+            Steps — {stepsRange === "day" ? "Today" : stepsRange === "week" ? "Last 7 Days" : "Last 30 Days"} <span className="meal-desc">vs {stepsTarget.toLocaleString()}/day target</span>
+          </h3>
+          <RangeTabs value={stepsRange} onChange={setStepsRange} options={[{ key: "day", label: "Day" }, { key: "week", label: "Week" }, { key: "month", label: "Month" }]} label="Steps range" />
+        </div>
+        {stepsRange === "day" ? (
+          todaySteps != null ? progressRow("Steps", todaySteps, stepsTarget, "var(--muscle)", "") : <div className="note">No steps synced for today yet.</div>
+        ) : (
+          <BarChartVsTarget days={stepsRange === "week" ? stepsSeries : stepsMonth} target={stepsTarget} color="var(--muscle)" targetLabel={stepsTarget.toLocaleString()} />
+        )}
       </div>
 
       <div className="card countdown-card" style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>

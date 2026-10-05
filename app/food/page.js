@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
-import { fmtDate, todayIso, weekDates, weekdayIndex, dayTypeFor, isCalorieDayOnTarget } from "../../lib/coaching";
+import { fmtDate, todayIso, addDays, weekDates, weekdayIndex, dayTypeFor, isCalorieDayOnTarget } from "../../lib/coaching";
 import { useProfile } from "../../lib/useProfile";
 import AppHeader from "../../components/AppHeader";
 import BottomNav from "../../components/BottomNav";
 import WeekBudgetChart from "../../components/charts/WeekBudgetChart";
+import RangeTabs from "../../components/RangeTabs";
 
 function groupByDay(rows) {
   const groups = [];
@@ -188,6 +189,7 @@ export default function FoodPage() {
   const [target, setTarget] = useState(null);
   const [meals, setMeals] = useState([]);
   const [saved, setSaved] = useState([]);
+  const [targetRange, setTargetRange] = useState("day");
   const [repeating, setRepeating] = useState(false);
   const [weekSessions, setWeekSessions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -205,7 +207,7 @@ export default function FoodPage() {
     const wDays = weekDates(todayIso());
     Promise.all([
       supabase.from("weekly_targets").select("*").eq("user_id", profile.id).order("week_start", { ascending: false }).limit(1),
-      supabase.from("food_log").select("*").eq("user_id", profile.id).order("logged_at", { ascending: false }).limit(120),
+      supabase.from("food_log").select("*").eq("user_id", profile.id).order("logged_at", { ascending: false }).limit(400),
       supabase.from("workout_sessions").select("*").eq("user_id", profile.id).gte("date", wDays[0]).lte("date", wDays[6]),
       supabase.from("saved_meals").select("*").eq("user_id", profile.id).order("created_at", { ascending: false }),
     ]).then(([targetRes, mealsRes, sessionsRes, savedRes]) => {
@@ -404,6 +406,20 @@ export default function FoodPage() {
   const todayCarb = sumField(todaysMeals, "carbs_g");
   const todayFiber = sumField(todaysMeals, "fiber_g");
 
+  // Day shows today as-is; Week / Month show the average per logged day so the
+  // same daily targets still make sense as the comparison. The in-progress day
+  // is left out of an average (it would read as a miss just because it isn't
+  // over) unless it's the only day there is.
+  const rangeDates = targetRange === "week" ? wDays.filter((d) => d <= today) : Array.from({ length: 30 }, (_, i) => addDays(today, i - 29));
+  let avgDates = rangeDates.filter((d) => d < today && calByDay.has(d));
+  if (avgDates.length === 0) avgDates = rangeDates.filter((d) => calByDay.has(d));
+  const rowsByDate = new Map(groups.map((g) => [g.date, g.rows]));
+  const avgOf = (field) => (avgDates.length ? avgDates.reduce((sum, d) => sum + sumField(rowsByDate.get(d) || [], field), 0) / avgDates.length : 0);
+  const shown =
+    targetRange === "day"
+      ? { cal: todayCal, protein: todayProtein, carb: todayCarb, fat: todayFat }
+      : { cal: avgOf("calories"), protein: avgOf("protein_g"), carb: avgOf("carbs_g"), fat: avgOf("fat_g") };
+
   const weekLoggedDays = wDays.filter((d) => d <= today && calByDay.has(d));
   const weekAvgProtein = weekLoggedDays.length ? weekLoggedDays.reduce((s, d) => s + proteinByDay.get(d), 0) / weekLoggedDays.length : null;
   // Today is still in progress — grading it against the full daily target
@@ -481,12 +497,22 @@ export default function FoodPage() {
       )}
 
       <div className="card">
-        <p className="eyebrow" style={{ marginBottom: 10 }}>Today&rsquo;s Targets</p>
-        {bar("Calories", todayCal, calTarget, "var(--fat)")}
-        {bar("Protein", todayProtein, proteinTarget, "var(--muscle)")}
-        {bar("Carbs", todayCarb, carbTarget, "var(--nutrition)")}
-        {bar("Fat", todayFat, fatTarget, "var(--training)")}
-        {todayFiber > 0 && <div className="meal-desc" style={{ marginTop: 8 }}>Fibre today: {Math.round(todayFiber)}g</div>}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+          <p className="eyebrow" style={{ margin: 0 }}>{targetRange === "day" ? "Today\u2019s Targets" : "Daily Average vs Targets"}</p>
+          <RangeTabs value={targetRange} onChange={setTargetRange} options={[{ key: "day", label: "Day" }, { key: "week", label: "Week" }, { key: "month", label: "Month" }]} label="Targets range" />
+        </div>
+        {bar("Calories", shown.cal, calTarget, "var(--fat)")}
+        {bar("Protein", shown.protein, proteinTarget, "var(--muscle)")}
+        {bar("Carbs", shown.carb, carbTarget, "var(--nutrition)")}
+        {bar("Fat", shown.fat, fatTarget, "var(--training)")}
+        {targetRange === "day" ? (
+          todayFiber > 0 && <div className="meal-desc" style={{ marginTop: 8 }}>Fibre today: {Math.round(todayFiber)}g</div>
+        ) : (
+          <div className="meal-desc" style={{ marginTop: 8 }}>
+            {avgDates.length > 0 ? `Average per day across ${avgDates.length} logged day${avgDates.length === 1 ? "" : "s"}` : "No logged days in this range yet."}
+            {targetRange === "week" ? " this week" : " in the last 30 days"}
+          </div>
+        )}
       </div>
 
       <p className="meal-desc" style={{ marginBottom: 6 }}>This week so far · day {daysElapsed} of 7</p>

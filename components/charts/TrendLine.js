@@ -19,6 +19,9 @@ export default function TrendLine({ points, paceValue, paceLabel, color }) {
   const x = (i) => left + (n === 1 ? 0 : (i / (n - 1)) * (right - left));
   const y = (v) => bottom - ((v - lo) / (hi - lo || 1)) * (bottom - top);
 
+  // With many readings (Month/Quarter) label only the ends and every few dates.
+  const dense = n > 7;
+  const labelEvery = dense ? Math.ceil(n / 4) : 1;
   const path = valid.map((p, i) => `${i === 0 ? "M" : "L"}${x(i)},${y(p.value)}`).join(" ");
 
   return (
@@ -35,9 +38,15 @@ export default function TrendLine({ points, paceValue, paceLabel, color }) {
       <path d={path} stroke={color} strokeWidth="2.5" fill="none" />
       {valid.map((p, i) => (
         <g key={p.date}>
-          <circle cx={x(i)} cy={y(p.value)} r="4" fill={color} />
-          <text x={x(i)} y={y(p.value) < 30 ? y(p.value) + 16 : y(p.value) - 10} fontSize="10" fill="var(--text)" textAnchor="middle">{p.value.toFixed(1)}</text>
-          <text x={x(i)} y={bottom + 10} fontSize="9.5" fill="var(--text-faint)" textAnchor="middle">{fmtDate(p.date)}</text>
+          <circle cx={x(i)} cy={y(p.value)} r={dense ? 2.5 : 4} fill={color}>
+            <title>{fmtDate(p.date)} · {p.value.toFixed(1)}</title>
+          </circle>
+          {(!dense || i === 0 || i === n - 1) && (
+            <text x={x(i)} y={y(p.value) < 30 ? y(p.value) + 16 : y(p.value) - 10} fontSize="10" fill="var(--text)" textAnchor="middle">{p.value.toFixed(1)}</text>
+          )}
+          {(i % labelEvery === 0 || i === n - 1) && (
+            <text x={x(i)} y={bottom + 10} fontSize="9.5" fill="var(--text-faint)" textAnchor="middle">{fmtDate(p.date)}</text>
+          )}
         </g>
       ))}
     </svg>

@@ -11,14 +11,19 @@ export default function BarChartVsTarget({ days, target, color, unit, targetLabe
   const withValues = days.map((d) => d.value).filter((v) => v != null);
   const maxVal = Math.max(target || 0, ...withValues, 1) * 1.15;
 
-  const barW = 28;
+  // Past ~10 bars (the Month view) there isn't room for a value on every bar
+  // or a date under every one: bars get thinner, values move to tooltips, and
+  // only every few dates are labelled.
+  const dense = days.length > 10;
   const slot = (right - left) / days.length;
+  const barW = dense ? Math.max(4, slot * 0.68) : 28;
+  const labelEvery = dense ? Math.ceil(days.length / 6) : 1;
   const yFor = (v) => chartBottom - (v / maxVal) * (chartBottom - chartTop);
   const targetY = yFor(target || 0);
 
   return (
     <div className="chart-scroll">
-    <svg viewBox={`0 0 ${W} 92`} width="100%" style={{ minWidth: 480 }} role="img"
+    <svg viewBox={`0 0 ${W} 92`} width="100%" style={{ minWidth: dense ? 0 : 480 }} role="img"
       aria-label={`${days.map((d) => `${fmtDate(d.date)} ${d.value != null ? d.value + (d.isToday ? " so far" : "") : "not logged yet"}`).join("; ")} vs a target of ${target}${unit || ""}`}>
       <g fontFamily="Inter, sans-serif">
         <line x1={left} y1={targetY} x2={right} y2={targetY} stroke="var(--text-faint)" strokeWidth="1.5" strokeDasharray="5 4" />
@@ -28,12 +33,20 @@ export default function BarChartVsTarget({ days, target, color, unit, targetLabe
 
         {days.map((d, i) => {
           const cx = left + slot * (i + 0.5);
+          const showDate = i % labelEvery === 0 || i === days.length - 1;
           if (d.value == null) {
             return (
               <g key={d.date}>
-                <circle cx={cx} cy={24} r="7" fill="none" stroke="var(--text-faint)" strokeWidth="2" strokeDasharray="3 2" />
-                <text x={cx} y={74} fontSize="10" fill="var(--text-dim)" textAnchor="middle">{fmtDate(d.date)}</text>
-                <text x={cx} y={86} fontSize="9" fill="var(--text-faint)" textAnchor="middle">no log yet</text>
+                {dense ? (
+                  <circle cx={cx} cy={chartBottom - 3} r="1.8" fill="var(--text-faint)"><title>{fmtDate(d.date)} · no log</title></circle>
+                ) : (
+                  <>
+                    <circle cx={cx} cy={24} r="7" fill="none" stroke="var(--text-faint)" strokeWidth="2" strokeDasharray="3 2" />
+                    <text x={cx} y={74} fontSize="10" fill="var(--text-dim)" textAnchor="middle">{fmtDate(d.date)}</text>
+                    <text x={cx} y={86} fontSize="9" fill="var(--text-faint)" textAnchor="middle">no log yet</text>
+                  </>
+                )}
+                {dense && showDate && <text x={cx} y={74} fontSize="9.5" fill="var(--text-dim)" textAnchor="middle">{fmtDate(d.date)}</text>}
               </g>
             );
           }
@@ -42,16 +55,20 @@ export default function BarChartVsTarget({ days, target, color, unit, targetLabe
           return (
             <g key={d.date}>
               <rect
-                x={cx - barW / 2} y={barY} width={barW} height={Math.max(0, chartBottom - barY)} rx="3"
+                x={cx - barW / 2} y={barY} width={barW} height={Math.max(0, chartBottom - barY)} rx={dense ? 1.5 : 3}
                 fill={color}
                 stroke={d.isToday ? "var(--warn)" : "none"}
                 strokeWidth={d.isToday ? "1.5" : "0"}
                 strokeDasharray={d.isToday ? "3 2" : "0"}
-              />
-              <text x={cx} y={barY - 6} fontSize="9" fill={over ? "var(--bad)" : "var(--warn)"} textAnchor="middle">
-                {Math.round(d.value).toLocaleString()}{d.isToday ? " so far" : ""}
-              </text>
-              <text x={cx} y={74} fontSize="10" fill="var(--text-dim)" textAnchor="middle">{fmtDate(d.date)}</text>
+              >
+                <title>{fmtDate(d.date)} · {Math.round(d.value).toLocaleString()}{unit || ""}{d.isToday ? " so far" : ""}</title>
+              </rect>
+              {!dense && (
+                <text x={cx} y={barY - 6} fontSize="9" fill={over ? "var(--bad)" : "var(--warn)"} textAnchor="middle">
+                  {Math.round(d.value).toLocaleString()}{d.isToday ? " so far" : ""}
+                </text>
+              )}
+              {showDate && <text x={cx} y={74} fontSize={dense ? 9.5 : 10} fill="var(--text-dim)" textAnchor="middle">{fmtDate(d.date)}</text>}
             </g>
           );
         })}
