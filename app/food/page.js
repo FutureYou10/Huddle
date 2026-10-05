@@ -31,6 +31,8 @@ const SOURCE_LABEL = {
   "Chat – estimated": "Chat · est.",
   "Chat – weighed": "Chat · weighed",
   "Photo estimate": "Photo",
+  "Saved meal": "Saved",
+  "Repeated": "Repeat",
 };
 
 const EDIT_FIELDS = [
@@ -44,8 +46,10 @@ const EDIT_FIELDS = [
 // One food-log row that opens into an inline editor on tap. Writes go straight
 // to Supabase under RLS (scoped by id + user_id as well), same direct-write
 // pattern as the weigh-in card.
-function MealRow({ m, userId, onSaved, onDeleted, onError }) {
+function MealRow({ m, userId, onSaved, onDeleted, onError, onRelog, onFavourite }) {
   const [open, setOpen] = useState(false);
+  const [favName, setFavName] = useState("");
+  const [favSaved, setFavSaved] = useState(false);
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [form, setForm] = useState({});
@@ -61,7 +65,24 @@ function MealRow({ m, userId, onSaved, onDeleted, onError }) {
       fiber_g: m.fiber_g ?? "",
     });
     setConfirmDelete(false);
+    setFavName(((m.description || m.meal || "").trim()).slice(0, 40));
+    setFavSaved(false);
     setOpen(true);
+  }
+
+  async function saveFavourite() {
+    if (busy || !favName.trim()) return;
+    setBusy(true);
+    const ok = await onFavourite(m, favName.trim());
+    setBusy(false);
+    if (ok) setFavSaved(true);
+  }
+
+  async function relog() {
+    if (busy) return;
+    setBusy(true);
+    await onRelog(m);
+    setBusy(false);
   }
 
   async function save() {
@@ -108,9 +129,12 @@ function MealRow({ m, userId, onSaved, onDeleted, onError }) {
         </div>
         <div className="meal-right">
           <div className="meal-cal">{m.calories != null ? `${m.calories} kcal` : "—"}</div>
-          <button type="button" className="meal-edit-btn" onClick={() => (open ? setOpen(false) : startEdit())} aria-label={open ? "Close editor" : `Edit ${m.meal}`}>
-            {open ? "Close" : "Edit"}
-          </button>
+          <div className="meal-actions">
+            <button type="button" className="meal-edit-btn" onClick={relog} disabled={busy} aria-label={`Log ${m.meal} again today`}>Log again</button>
+            <button type="button" className="meal-edit-btn" onClick={() => (open ? setOpen(false) : startEdit())} aria-label={open ? "Close editor" : `Edit ${m.meal}`}>
+              {open ? "Close" : "Edit"}
+            </button>
+          </div>
         </div>
       </div>
       {open && (
@@ -144,6 +168,15 @@ function MealRow({ m, userId, onSaved, onDeleted, onError }) {
             )}
             <button type="button" className="btn ghost" onClick={() => setOpen(false)} disabled={busy}>Cancel</button>
           </div>
+          <div className="meal-fav">
+            <label className="field-label">Save as a favourite</label>
+            <div className="meal-fav-row">
+              <input type="text" value={favName} onChange={(e) => { setFavName(e.target.value); setFavSaved(false); }} placeholder="Name, e.g. Usual breakfast" />
+              <button type="button" className="btn secondary" style={{ width: "auto", padding: "9px 14px" }} onClick={saveFavourite} disabled={busy || !favName.trim()}>
+                {favSaved ? "Saved" : "Save"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -154,6 +187,8 @@ export default function FoodPage() {
   const { loading: profileLoading, profile, error: profileError } = useProfile();
   const [target, setTarget] = useState(null);
   const [meals, setMeals] = useState([]);
+  const [saved, setSaved] = useState([]);
+  const [repeating, setRepeating] = useState(false);
   const [weekSessions, setWeekSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -172,7 +207,8 @@ export default function FoodPage() {
       supabase.from("weekly_targets").select("*").eq("user_id", profile.id).order("week_start", { ascending: false }).limit(1),
       supabase.from("food_log").select("*").eq("user_id", profile.id).order("logged_at", { ascending: false }).limit(120),
       supabase.from("workout_sessions").select("*").eq("user_id", profile.id).gte("date", wDays[0]).lte("date", wDays[6]),
-    ]).then(([targetRes, mealsRes, sessionsRes]) => {
+      supabase.from("saved_meals").select("*").eq("user_id", profile.id).order("created_at", { ascending: false }),
+    ]).then(([targetRes, mealsRes, sessionsRes, savedRes]) => {
       if (cancelled) return;
       if (targetRes.error) setError(targetRes.error.message);
       if (mealsRes.error) setError(mealsRes.error.message);
@@ -180,6 +216,8 @@ export default function FoodPage() {
       setTarget((targetRes.data && targetRes.data[0]) || null);
       setMeals(mealsRes.data || []);
       setWeekSessions(sessionsRes.data || []);
+      // Favourites are a nice-to-have: a failure here shouldn't block the page.
+      setSaved(savedRes.data || []);
       setLoading(false);
     });
     return () => { cancelled = true; };
@@ -261,6 +299,80 @@ export default function FoodPage() {
     } finally {
       setDeciding(false);
     }
+  }
+
+  // Inserts one or more entries stamped "now" and shows them straight away.
+  async function addToLog(entries) {
+    const stamp = new Date().toISOString();
+    const rows = entries.map((e) => ({
+      user_id: profile.id,
+      meal: e.meal,
+      description: e.description ?? null,
+      calories: e.calories ?? null,
+      protein_g: e.protein_g ?? null,
+      carbs_g: e.carbs_g ?? null,
+      fat_g: e.fat_g ?? null,
+      fiber_g: e.fiber_g ?? null,
+      source: e.source || null,
+      logged_at: stamp,
+    }));
+    const { data, error: insErr } = await supabase.from("food_log").insert(rows).select();
+    if (insErr || !data) {
+      setError(insErr?.message || "Couldn't add that.");
+      return false;
+    }
+    setError("");
+    setMeals((ms) => [...data, ...ms]);
+    return true;
+  }
+
+  function relogMeal(m) {
+    return addToLog([m]);
+  }
+
+  async function repeatYesterday() {
+    if (repeating) return;
+    const y = new Date(`${todayIso()}T12:00:00`);
+    y.setDate(y.getDate() - 1);
+    const yIso = `${y.getFullYear()}-${String(y.getMonth() + 1).padStart(2, "0")}-${String(y.getDate()).padStart(2, "0")}`;
+    const rows = meals.filter((r) => (r.logged_at || "").slice(0, 10) === yIso);
+    if (!rows.length) return setError("Nothing logged yesterday to repeat.");
+    setRepeating(true);
+    await addToLog(rows.map((r) => ({ ...r, source: "Repeated" })));
+    setRepeating(false);
+  }
+
+  async function saveFavourite(m, name) {
+    const { data, error: favErr } = await supabase
+      .from("saved_meals")
+      .insert({
+        user_id: profile.id,
+        name,
+        description: m.description ?? null,
+        calories: m.calories ?? null,
+        protein_g: m.protein_g ?? null,
+        carbs_g: m.carbs_g ?? null,
+        fat_g: m.fat_g ?? null,
+      })
+      .select()
+      .single();
+    if (favErr || !data) {
+      setError(favErr?.message || "Couldn't save that favourite.");
+      return false;
+    }
+    setError("");
+    setSaved((s) => [data, ...s]);
+    return true;
+  }
+
+  async function removeFavourite(id) {
+    const { error: delErr } = await supabase.from("saved_meals").delete().eq("id", id).eq("user_id", profile.id);
+    if (delErr) return setError(delErr.message);
+    setSaved((s) => s.filter((x) => x.id !== id));
+  }
+
+  function addFavourite(f) {
+    return addToLog([{ meal: f.name, description: f.description, calories: f.calories, protein_g: f.protein_g, carbs_g: f.carbs_g, fat_g: f.fat_g, source: "Saved meal" }]);
   }
 
   function onMealSaved(row) {
@@ -427,12 +539,40 @@ export default function FoodPage() {
       )}
 
       <div className="card">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 10 }}>
+          <p className="eyebrow" style={{ margin: 0 }}>Quick Add</p>
+          <button type="button" className="meal-edit-btn" onClick={repeatYesterday} disabled={repeating}>
+            {repeating ? "Adding…" : "Repeat yesterday"}
+          </button>
+        </div>
+        {saved.length === 0 ? (
+          <div className="note">Open any entry below with Edit and save it as a favourite — then it&rsquo;s one tap to add again.</div>
+        ) : (
+          saved.map((f) => (
+            <div className="meal-row" key={f.id}>
+              <div>
+                <div className="meal-name">{f.name}</div>
+                <div className="meal-desc">{f.description}</div>
+              </div>
+              <div className="meal-right">
+                <div className="meal-cal">{f.calories != null ? `${Math.round(Number(f.calories))} kcal` : "—"}</div>
+                <div className="meal-actions">
+                  <button type="button" className="meal-edit-btn" onClick={() => addFavourite(f)}>Add to today</button>
+                  <button type="button" className="meal-edit-btn meal-delete" onClick={() => removeFavourite(f.id)} aria-label={`Remove ${f.name} from favourites`}>Remove</button>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="card">
         <p className="eyebrow" style={{ marginBottom: 10 }}>Today&rsquo;s Food Log</p>
         {todaysMeals.length === 0 ? (
           <div className="note">Nothing logged yet today — this fills in as your Nutritionist chat gets logged.</div>
         ) : (
           todaysMeals.map((m) => (
-            <MealRow key={m.id} m={m} userId={profile.id} onSaved={onMealSaved} onDeleted={onMealDeleted} onError={setError} />
+            <MealRow key={m.id} m={m} userId={profile.id} onSaved={onMealSaved} onDeleted={onMealDeleted} onError={setError} onRelog={relogMeal} onFavourite={saveFavourite} />
           ))
         )}
       </div>
@@ -451,7 +591,7 @@ export default function FoodPage() {
                   <span>{Math.round(dayTotal)} kcal</span>
                 </div>
                 {g.rows.map((m) => (
-                  <MealRow key={m.id} m={m} userId={profile.id} onSaved={onMealSaved} onDeleted={onMealDeleted} onError={setError} />
+                  <MealRow key={m.id} m={m} userId={profile.id} onSaved={onMealSaved} onDeleted={onMealDeleted} onError={setError} onRelog={relogMeal} onFavourite={saveFavourite} />
                 ))}
               </div>
             );
