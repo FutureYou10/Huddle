@@ -116,7 +116,7 @@ body {
 .shell {
   max-width: 480px;
   margin: 0 auto;
-  padding: 24px 20px calc(24px + env(safe-area-inset-bottom, 0px));
+  padding: calc(24px + env(safe-area-inset-top, 0px)) 20px calc(24px + env(safe-area-inset-bottom, 0px));
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -768,7 +768,7 @@ details.more summary::-webkit-details-marker { display: none; }
 .day-split-row select { flex: 1; margin: 0; }
 
 /* Onboarding wizard */
-.wizard-shell { padding-top: 20px; }
+.wizard-shell { padding-top: calc(20px + env(safe-area-inset-top, 0px)); }
 .wizard-progress-track { height: 5px; border-radius: 4px; background: var(--bg-raised); border: 1px solid var(--line); overflow: hidden; }
 .wizard-progress-fill { height: 100%; background: var(--accent); border-radius: 4px; transition: width 0.25s ease; }
 
