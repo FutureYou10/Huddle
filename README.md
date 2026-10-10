@@ -104,7 +104,13 @@ Every thought moves **tangled → solved → committed → done**, or gets **let
 - Out-of-control items can't be solved, only let go. If there's a small part
   you can still do, it's shown.
 
-**Importing Claude chats:** claude.ai doesn't offer an API for reading your
+**Pulling in Claude chats (quick way):** Empty head has a *Copy the prompt*
+button. Paste the prompt into a new claude.ai chat, which searches your past
+conversations and writes a detailed summary grouped by area, with how often each
+thing came up and how much of it is in your control. Paste that answer back into
+Empty head and untangle it. Run it again any time; repeats get merged.
+
+**Importing Claude chats (full export):** claude.ai doesn't offer an API for reading your
 chats, so this works from the data export (claude.ai → Settings → Privacy →
 Export data). Choose the .zip in the Mind tab and pick which chats to include.
 The file is read in the browser. Only a condensed version of your own messages

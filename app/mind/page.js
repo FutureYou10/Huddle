@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
 import { useProfile } from "../../lib/useProfile";
-import { headspace, isOpen, itemWeight, nextStep, stepProgress, STAGE_LABELS, areaColor } from "../../lib/mind";
+import { headspace, isOpen, itemWeight, nextStep, stepProgress, STAGE_LABELS, areaColor, SUMMARY_PROMPT } from "../../lib/mind";
 import AppHeader from "../../components/AppHeader";
 import BottomNav from "../../components/BottomNav";
 import BrainMap from "../../components/mind/BrainMap";
@@ -81,6 +81,8 @@ export default function MindPage() {
   const [dump, setDump] = useState("");
   const [untangling, setUntangling] = useState(false);
   const [dumpResult, setDumpResult] = useState("");
+  const [promptCopied, setPromptCopied] = useState(false);
+  const [showPrompt, setShowPrompt] = useState(false);
 
   useEffect(() => {
     try {
@@ -176,6 +178,17 @@ export default function MindPage() {
       }
     },
   };
+
+  async function copyPrompt() {
+    try {
+      await navigator.clipboard.writeText(SUMMARY_PROMPT);
+      setPromptCopied(true);
+      setTimeout(() => setPromptCopied(false), 2500);
+    } catch {
+      // Clipboard blocked (some in-app browsers): show it to copy by hand.
+      setShowPrompt(true);
+    }
+  }
 
   async function untangle() {
     if (!dump.trim()) return;
@@ -386,7 +399,26 @@ export default function MindPage() {
                 </p>
               )}
             </div>
-            <ChatImport onImported={load} />
+            <div className="card">
+              <p className="eyebrow">Pull in everything from your Claude chats</p>
+              <ol className="mind-howto">
+                <li>Copy the prompt below.</li>
+                <li>Paste it into a new chat on claude.ai. It will look back through your past chats.</li>
+                <li>Copy Claude's answer, paste it into the box above, and tap <b>Untangle it</b>.</li>
+              </ol>
+              <button className="btn secondary" onClick={copyPrompt}>
+                {promptCopied ? "Copied ✓ Now paste it into Claude" : "Copy the prompt"}
+              </button>
+              <button className="btn ghost" onClick={() => setShowPrompt(!showPrompt)}>
+                {showPrompt ? "Hide prompt" : "Show prompt"}
+              </button>
+              {showPrompt && <pre className="mind-prompt">{SUMMARY_PROMPT}</pre>}
+              <p className="field-hint">Run it again any time. Things already on the map get merged, not duplicated.</p>
+            </div>
+            <details className="mind-export-details">
+              <summary>Or import a full claude.ai export instead</summary>
+              <ChatImport onImported={load} />
+            </details>
           </>
         )}
       </div>

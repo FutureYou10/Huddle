@@ -5,7 +5,7 @@ import { newStep } from "../../../../lib/mind";
 
 export const maxDuration = 60;
 
-const MAX_INPUT_CHARS = 30000;
+const MAX_INPUT_CHARS = 40000;
 
 // POST { text } — a brain dump typed or pasted in the Mind tab — or
 // { chats: [{ uuid, title, text }] } — one batch of condensed Claude chats
@@ -48,7 +48,7 @@ export async function POST(request) {
       ],
       tools: [UNTANGLE_TOOL],
       toolChoice: { type: "tool", name: UNTANGLE_TOOL.name },
-      maxTokens: 4096,
+      maxTokens: 8000,
     });
     const result = toolInputFromResponse(response, UNTANGLE_TOOL.name);
     const found = Array.isArray(result?.items) ? result.items : [];
