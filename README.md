@@ -49,6 +49,7 @@ instead of seeing your existing history.
 - `app/food/page.js` — **Food** tab: weekly targets + meal log, grouped by day
 - `app/training/page.js` — **Training** tab: workout plan + recent sessions (grouped by day, sets shown as chips)
 - `app/training/log/page.js` — log a workout set (the one manual-entry form that's stayed — see Status below)
+- `app/mind/page.js` — **Mind** tab: a map of everything taking up headspace (see below)
 - `components/AppHeader.js` — shared page header (title + sign out), used by all three dashboards
 - `components/BottomNav.js` — the tab bar (Overview / Food / Training), active-state aware
 - `lib/supabaseClient.js` — Supabase client setup
@@ -80,3 +81,37 @@ conversations with Claude and the scheduled task, separately from Huddle.
 Bringing that into the app, and repointing the live data pipeline from
 Airtable to Supabase, are the next real steps — then eventually porting to
 Expo/React Native for the App Store.
+
+## Mind tab
+
+A visual of what's on your mind, built to turn thinking into action instead of
+rumination. You sit in the middle of the map. Each life area (Work, Money,
+Family…) is an atom, sized by how much headspace it's taking, and its thoughts
+circle it as electrons. Anything out of your control sits on a faint outer ring,
+apart from what you can act on.
+
+Every thought moves **tangled → solved → committed → done**, or gets **let go**:
+
+- **Empty head**: type or dictate a brain dump, or import past Claude chats.
+  Claude sorts it into areas, merges repeats (so a thought you keep coming back
+  to shows as 🔁 *on a loop*), and labels each one *in my control*,
+  *partly mine* or *out of my control*.
+- **Solve it**: for a stuck decision or worry, Claude names the real question,
+  offers 2–3 options with small steps each, and recommends one. Pick one and
+  it's solved.
+- **Commit**: sign up to the steps. Committed things feed **Do**, which shows
+  one tiny next step at a time with a big *Done ✓*.
+- Out-of-control items can't be solved, only let go. If there's a small part
+  you can still do, it's shown.
+
+**Importing Claude chats:** claude.ai doesn't offer an API for reading your
+chats, so this works from the data export (claude.ai → Settings → Privacy →
+Export data). Choose the .zip in the Mind tab and pick which chats to include.
+The file is read in the browser. Only a condensed version of your own messages
+from the chats you pick is sent to Claude to be sorted, and only the items it
+pulls out are stored. Chats already imported are remembered, so a later export
+only brings in new ones.
+
+Tables: `mind_areas`, `mind_items`, `mind_imported_chats`
+(`supabase/migrations/20261010_mind_map.sql`, already applied to the project).
+Uses the same `ANTHROPIC_API_KEY` as the coach chat.

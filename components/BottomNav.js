@@ -49,10 +49,24 @@ function CoachIcon({ active }) {
   );
 }
 
+function MindIcon({ active }) {
+  return (
+    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke={active ? "var(--accent)" : "currentColor"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="2.6" />
+      <circle cx="5" cy="6" r="1.8" />
+      <circle cx="19" cy="7" r="1.8" />
+      <circle cx="6.5" cy="18.5" r="1.8" />
+      <circle cx="18" cy="18" r="1.8" />
+      <path d="M10 10.5 6.4 7.2M14.2 10.8 17.5 8.2M10.2 13.9 7.8 17.1M14 13.8 16.6 16.7" />
+    </svg>
+  );
+}
+
 const TABS = [
   { href: "/", label: "Overview", Icon: OverviewIcon },
   { href: "/food", label: "Food", Icon: FoodIcon },
   { href: "/training", label: "Training", Icon: TrainingIcon },
+  { href: "/mind", label: "Mind", Icon: MindIcon },
 ];
 
 // Coach is now its own full-screen page (app/coach) rather than a panel this
