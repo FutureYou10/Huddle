@@ -261,8 +261,13 @@ export default function OverviewPage() {
   const nutritionLeft = Math.max(0, daysToGoal.length - 1);
 
   const sessionByDate = new Map(sessions.map((s) => [s.date, s]));
+  // checklist_start_date lets the two checklists be reset without moving the
+  // phase start / baseline that the weight and body-fat progress is measured from.
+  const checklistStart = profile?.checklist_start_date && profile.checklist_start_date > (profile?.start_date || "")
+    ? profile.checklist_start_date
+    : (profile?.start_date || today);
   const checklistDays = [];
-  for (let d = profile?.start_date || today; d <= (profile?.end_date || today) && checklistDays.length < 90; d = addDays(d, 1)) {
+  for (let d = checklistStart; d <= (profile?.end_date || today) && checklistDays.length < 90; d = addDays(d, 1)) {
     const dt = dayTypeFor(profile, d);
     const session = sessionByDate.get(d);
     let status = "";
@@ -276,7 +281,7 @@ export default function OverviewPage() {
   const trainingTotalSoFar = checklistDays.filter((d) => d.status === "done" || d.status === "missed").length;
 
   const foodDaysAll = [];
-  for (let d = profile?.start_date || today; d <= (profile?.end_date || today) && foodDaysAll.length < 90; d = addDays(d, 1)) {
+  for (let d = checklistStart; d <= (profile?.end_date || today) && foodDaysAll.length < 90; d = addDays(d, 1)) {
     let status = "";
     if (d === today) status = "today";
     else if (calByDay.has(d) && calTarget != null) {
@@ -555,7 +560,7 @@ export default function OverviewPage() {
 
       <div className="card">
         <h3 style={{ fontFamily: "var(--font-display)", fontSize: 13, textTransform: "uppercase", color: "var(--text-dim)", marginBottom: 12 }}>
-          Workout Checklist <span className="meal-desc">{fmtDate(profile?.start_date)} → {fmtDate(profile?.end_date)}</span>
+          Workout Checklist <span className="meal-desc">{fmtDate(checklistStart)} → {fmtDate(profile?.end_date)}</span>
         </h3>
         <DayBoxGrid days={checklistDays} />
         <div className="empty-state" style={{ paddingTop: 10 }}><b>{trainingDoneCount} of {checklistDays.filter((d) => d.status !== "rest" && d.status !== "").length}</b> sessions done</div>

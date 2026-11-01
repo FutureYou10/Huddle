@@ -9,8 +9,14 @@ import { useProfile } from "../../lib/useProfile";
 import AppHeader from "../../components/AppHeader";
 import BottomNav from "../../components/BottomNav";
 import Sparkline from "../../components/charts/Sparkline";
+import { swapOptions } from "../../lib/exerciseLibrary";
 
 const REP_QUICK = [6, 7, 8, 9, 10, 11, 12];
+
+// A swapped exercise is saved against its own name in workout_log (so its
+// history and PRs stay separate from the planned lift) and tagged with the
+// planned lift it replaced, so reopening the day shows the swap again.
+const SWAP_PREFIX = "Swapped from ";
 
 // In-progress set weights/reps live only in React state until "Save session"
 // is tapped — so switching screens (bottom nav) or the browser reclaiming a
@@ -21,7 +27,7 @@ function draftKey(userId, dateIso) {
   return `huddle-training-draft-${userId}-${dateIso}`;
 }
 
-function ExerciseRow({ ex, formSets, onWeight, onReps, history }) {
+function ExerciseRow({ ex, formSets, onWeight, onReps, history, onSwap, canSwap, onUndoSwap }) {
   const targets = pyramidTargets(ex);
   const step = stepSizeFor(ex);
   const last = history?.[0];
@@ -31,13 +37,22 @@ function ExerciseRow({ ex, formSets, onWeight, onReps, history }) {
   return (
     <div className="exercise-row">
       <div className="exercise-top">
-        <div className="exercise-name">{ex.exercise}</div>
+        <div className="exercise-name">
+          {ex.exercise}
+          {canSwap && <button type="button" className="swap-btn" onClick={() => onSwap(ex)} aria-label={`Swap ${ex.exercise} for a similar exercise`}>⇄ Swap</button>}
+        </div>
         <div className="exercise-target">
           {ex.target_sets} × {ex.rep_max}→{ex.rep_min} reps · {ex.lift_type}
           {lastTop && <> · last time top set {lastTop.weight_kg}kg × {lastTop.reps}</>}
           {pr && <> · <b style={{ color: "var(--accent)" }}>PR {pr.weight_kg}kg × {pr.reps}</b></>}
         </div>
       </div>
+      {ex.originalExercise && (
+        <div className="swap-note">
+          Swapped in for {ex.originalExercise} (same muscle) ·{" "}
+          <button type="button" className="swap-undo" onClick={() => onUndoSwap(ex)}>Put it back</button>
+        </div>
+      )}
       {ptNote && <div className="exercise-pt-note">💬 {ptNote}</div>}
       <div className="pyramid-sets">
         {Array.from({ length: ex.target_sets || 0 }, (_, s) => {
@@ -87,6 +102,7 @@ export default function TrainingPage() {
   const [error, setError] = useState("");
   const [selectedDate, setSelectedDate] = useState(todayIso());
   const [formSets, setFormSets] = useState({});
+  const [swaps, setSwaps] = useState({}); // plan row id -> exercise swapped in for today
   const [note, setNote] = useState("");
   const [complete, setComplete] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -120,6 +136,16 @@ export default function TrainingPage() {
   const session = sessions.find((s) => s.date === selectedDate) || null;
   const logForDay = logRows.filter((r) => r.date === selectedDate);
   const logByExercise = useMemo(() => groupLogByExercise(logRows), [logRows]);
+
+  // Today's plan with any swaps applied. The swapped-in exercise starts from
+  // its own last logged top-set weight (never the planned lift's weight).
+  function applySwap(ex, altName) {
+    if (!altName || altName === ex.exercise) return ex;
+    const hist = logByExercise.get(altName);
+    const lastTop = hist?.[0]?.sets?.[hist[0].sets.length - 1];
+    return { ...ex, exercise: altName, originalExercise: ex.exercise, current_working_weight_kg: lastTop?.weight_kg ?? null };
+  }
+  const effDayPlan = dayPlan.map((ex) => applySwap(ex, swaps[ex.id]));
   const overloadFlags = useMemo(() => computeOverloadFlags(plan, logByExercise), [plan, logByExercise]);
   const keyLifts = useMemo(() => {
     const list = [];
@@ -137,7 +163,7 @@ export default function TrainingPage() {
   // whether an exercise is trending up or down.
   const strengthBoard = useMemo(() => {
     const list = [];
-    for (const ex of dayPlan) {
+    for (const ex of effDayPlan) {
       const hist = logByExercise.get(ex.exercise);
       if (!hist || !hist.length) continue;
       const pr = maxWeightForExercise(hist);
@@ -145,12 +171,29 @@ export default function TrainingPage() {
       list.push({ exercise: ex.exercise, pr, sessionCount: hist.length, trendPct: strengthTrendPct(hist) });
     }
     return list.sort((a, b) => a.exercise.localeCompare(b.exercise));
-  }, [dayPlan, logByExercise]);
+  }, [dayPlan, swaps, logByExercise]);
 
   useEffect(() => {
     if (!profile) return;
+    // Swaps: restored from the unsaved draft if there is one, otherwise from
+    // the "Swapped from …" tags on whatever was already saved for this date.
+    let initSwaps = {};
+    for (const r of logForDay) {
+      if (typeof r.notes === "string" && r.notes.startsWith(SWAP_PREFIX)) {
+        const orig = r.notes.slice(SWAP_PREFIX.length);
+        const planRow = dayPlan.find((p) => p.exercise === orig);
+        if (planRow) initSwaps[planRow.id] = r.exercise;
+      }
+    }
+    try {
+      const rawDraft = localStorage.getItem(draftKey(profile.id, selectedDate));
+      const d = rawDraft ? JSON.parse(rawDraft) : null;
+      if (d && d.swaps && typeof d.swaps === "object") initSwaps = d.swaps;
+    } catch {}
+
     const init = {};
-    for (const ex of dayPlan) {
+    for (const planEx of dayPlan) {
+      const ex = applySwap(planEx, initSwaps[planEx.id]);
       const targets = pyramidTargets(ex);
       const existing = logForDay.filter((r) => r.exercise === ex.exercise).sort((a, b) => (a.set_number || 0) - (b.set_number || 0));
       for (let s = 0; s < (ex.target_sets || 0); s++) {
@@ -178,16 +221,17 @@ export default function TrainingPage() {
     } catch {}
 
     setFormSets(init);
+    setSwaps(initSwaps);
     setNote(initNote);
     setComplete(initComplete);
     setSaveMsg("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate, plan, logRows, sessions, profile]);
 
-  function persistDraft(nextFormSets, nextNote, nextComplete) {
+  function persistDraft(nextFormSets, nextNote, nextComplete, nextSwaps = swaps) {
     if (!profile) return;
     try {
-      localStorage.setItem(draftKey(profile.id, selectedDate), JSON.stringify({ formSets: nextFormSets, note: nextNote, complete: nextComplete }));
+      localStorage.setItem(draftKey(profile.id, selectedDate), JSON.stringify({ formSets: nextFormSets, note: nextNote, complete: nextComplete, swaps: nextSwaps }));
     } catch {}
   }
 
@@ -232,7 +276,7 @@ export default function TrainingPage() {
       if (delErr) throw delErr;
 
       const rows = [];
-      dayPlan.forEach((ex) => {
+      effDayPlan.forEach((ex) => {
         for (let s = 0; s < (ex.target_sets || 0); s++) {
           const v = formSets[`${ex.id}-${s}`];
           if (v && (v.weight !== "" || v.reps !== "")) {
@@ -240,6 +284,7 @@ export default function TrainingPage() {
               user_id: profile.id, date: selectedDate, day_type: dayType, exercise: ex.exercise, set_number: s + 1,
               weight_kg: v.weight === "" ? null : Number(v.weight),
               reps: v.reps === "" ? null : Number(v.reps),
+              notes: ex.originalExercise ? `${SWAP_PREFIX}${ex.originalExercise}` : null,
             });
           }
         }
@@ -257,6 +302,35 @@ export default function TrainingPage() {
       setSaving(false);
     }
   }
+
+  // Cycle a planned exercise through same-muscle, same-type alternatives
+  // (e.g. barbell back squat → front squat → hack squat …) and back to the
+  // original. Sets restart from the new exercise's own last weight.
+  function setSwapFor(planEx, nextName) {
+    const original = planEx.originalExercise || planEx.exercise;
+    const planRow = dayPlan.find((p) => p.id === planEx.id) || planEx;
+    const nextSwaps = { ...swaps };
+    if (nextName === original) delete nextSwaps[planRow.id]; else nextSwaps[planRow.id] = nextName;
+    const nextEx = applySwap(planRow, nextSwaps[planRow.id]);
+    const targets = pyramidTargets(nextEx);
+    const nextForm = { ...formSets };
+    for (let s = 0; s < (nextEx.target_sets || 0); s++) {
+      nextForm[`${planRow.id}-${s}`] = { weight: targets[s]?.weight ? String(targets[s].weight) : "", reps: "" };
+    }
+    setSwaps(nextSwaps);
+    setFormSets(nextForm);
+    persistDraft(nextForm, note, complete, nextSwaps);
+  }
+  function onSwap(ex) {
+    const original = ex.originalExercise || ex.exercise;
+    const taken = new Set(effDayPlan.filter((p) => p.id !== ex.id).map((p) => p.exercise.toLowerCase()));
+    const options = swapOptions(original, taken);
+    if (options.length < 2) return;
+    const idx = Math.max(0, options.indexOf(ex.exercise));
+    setSwapFor(ex, options[(idx + 1) % options.length]);
+  }
+  function onUndoSwap(ex) { setSwapFor(ex, ex.originalExercise); }
+  const canSwapEx = (ex) => swapOptions(ex.originalExercise || ex.exercise, new Set(effDayPlan.filter((p) => p.id !== ex.id).map((p) => p.exercise.toLowerCase()))).length > 1;
 
   async function applyOverload(flag) {
     await supabase.from("workout_plan").update({ current_working_weight_kg: flag.suggested }).eq("id", flag.planId);
@@ -290,7 +364,7 @@ export default function TrainingPage() {
   const wDays = weekDates(todayIso());
   const today = todayIso();
   const extrasForDay = extras.filter((e) => e.date === selectedDate);
-  const blocks = groupSupersets(dayPlan);
+  const blocks = groupSupersets(effDayPlan);
 
   return (
     <div className="shell shell-with-nav">
@@ -368,11 +442,11 @@ export default function TrainingPage() {
               <div className="superset-block" key={i}>
                 <div className="superset-label">⚡ Superset {block.tag} — alternate, minimal rest between</div>
                 {block.exercises.map((ex) => (
-                  <ExerciseRow key={ex.id} ex={ex} formSets={formSets} onWeight={onWeight} onReps={onReps} history={logByExercise.get(ex.exercise)} />
+                  <ExerciseRow key={ex.id} ex={ex} formSets={formSets} onWeight={onWeight} onReps={onReps} history={logByExercise.get(ex.exercise)} onSwap={onSwap} onUndoSwap={onUndoSwap} canSwap={canSwapEx(ex)} />
                 ))}
               </div>
             ) : (
-              <ExerciseRow key={block.exercises[0].id} ex={block.exercises[0]} formSets={formSets} onWeight={onWeight} onReps={onReps} history={logByExercise.get(block.exercises[0].exercise)} />
+              <ExerciseRow key={block.exercises[0].id} ex={block.exercises[0]} formSets={formSets} onWeight={onWeight} onReps={onReps} history={logByExercise.get(block.exercises[0].exercise)} onSwap={onSwap} onUndoSwap={onUndoSwap} canSwap={canSwapEx(block.exercises[0])} />
             ))}
 
             <div className="field" style={{ marginTop: 12 }}>
