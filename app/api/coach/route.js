@@ -79,7 +79,7 @@ export async function POST(request) {
     }
     const { data: historyRows, error: historyErr } = await historyQuery;
     if (historyErr) throw historyErr;
-    const history = (historyRows || []).slice().reverse().map((r) => ({ role: r.role, content: r.body }));
+    const history = (historyRows || []).slice().reverse().filter((r) => typeof r.body === "string" && r.body.trim()).map((r) => ({ role: r.role, content: r.body }));
 
     const contextText = await buildContext(supabase, userId, coach, profile);
     const system = systemPromptFor(coach, contextText, profile);
