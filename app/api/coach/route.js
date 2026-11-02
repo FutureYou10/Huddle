@@ -166,6 +166,9 @@ export async function POST(request) {
                   toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content: `Failed to log: ${insertErr.message}`, is_error: true });
                 } else {
                   loggedMeals.push(input);
+                  // Tell the app right now, so Harry sees a tick the moment the
+                  // row is saved — even if the written reply that follows fails.
+                  enqueue({ type: "logged", action: "logged", label: `${input.description || input.meal || "Meal"}${input.calories != null ? ` · ${Math.round(Number(input.calories))} kcal` : ""}` });
                   toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content: "Logged." });
                 }
               } else if (toolUse.name === "edit_meal") {
@@ -190,6 +193,7 @@ export async function POST(request) {
                     toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content: `No food log entry with id ${input.id} — nothing changed.`, is_error: true });
                   } else {
                     foodChanges += 1;
+                    enqueue({ type: "logged", action: "updated", label: "Food log entry updated" });
                     toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content: "Updated." });
                   }
                 }
@@ -210,6 +214,7 @@ export async function POST(request) {
                     toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content: `No food log entry with id ${input.id} — nothing deleted.`, is_error: true });
                   } else {
                     foodChanges += 1;
+                    enqueue({ type: "logged", action: "removed", label: "Removed from your food log" });
                     toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content: "Deleted." });
                   }
                 }

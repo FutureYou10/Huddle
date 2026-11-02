@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
 import { useProfile } from "../../lib/useProfile";
 import AppHeader from "../../components/AppHeader";
@@ -27,7 +27,7 @@ const GREETING = {
 // bottom nav, mirror how a normal messaging app surfaces "something's new."
 export default function CoachChatPage() {
   const { loading: profileLoading, profile, error: profileError } = useProfile();
-  const [tab, setTab] = useState("transformation");
+  const [tab, setTab] = useState("nutritionist");
   const [threads, setThreads] = useState({});
   const [loadingTab, setLoadingTab] = useState({});
   const [unreadCounts, setUnreadCounts] = useState({ transformation: 0, nutritionist: 0, trainer: 0 });
@@ -110,7 +110,7 @@ export default function CoachChatPage() {
     setLoadingTab((s) => ({ ...s, [coach]: true }));
     const { data, error: err } = await supabase
       .from("coach_messages")
-      .select("id, role, body")
+      .select("id, role, body, meta")
       .eq("user_id", profile.id)
       .eq("coach", coach)
       .order("created_at", { ascending: true })
@@ -216,6 +216,12 @@ export default function CoachChatPage() {
               ...t,
               [tab]: (t[tab] || []).map((m) => (m.id === replyId ? { ...m, body: evt.reply ?? m.body } : m)),
             }));
+          } else if (evt.type === "logged") {
+            // The food log write has landed — show a tick straight away.
+            setThreads((t) => ({
+              ...t,
+              [tab]: [...(t[tab] || []), { id: `tick-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, role: "tick", body: evt.label || "Saved to your food log" }],
+            }));
           } else if (evt.type === "error") {
             streamError = evt.error || "Something went wrong.";
           }
@@ -280,8 +286,11 @@ export default function CoachChatPage() {
           </div>
         )}
         {list.map((m) =>
-          m.role === "assistant" ? (
-            <div key={m.id} className="coach-msg-with-avatar">
+          m.role === "tick" ? (
+            <div key={m.id} className="coach-tick"><span aria-hidden="true">✓</span> {m.body}</div>
+          ) : m.role === "assistant" ? (
+            <Fragment key={m.id}>
+            <div className="coach-msg-with-avatar">
               <span className="coach-msg-avatar">
                 <ActiveFace size={30} />
               </span>
@@ -308,6 +317,10 @@ export default function CoachChatPage() {
                 </button>
               </div>
             </div>
+            {(m.meta?.logged_meals || []).map((lm, i) => (
+              <div key={`${m.id}-t${i}`} className="coach-tick"><span aria-hidden="true">✓</span> {lm.description || lm.meal || "Meal"}{lm.calories != null ? ` · ${Math.round(Number(lm.calories))} kcal` : ""}</div>
+            ))}
+            </Fragment>
           ) : (
             <div key={m.id} className={`coach-msg coach-msg-${m.role}`}>{m.body}</div>
           )
